@@ -239,7 +239,7 @@ def _extract_doc_candidates(
                     "title": filename,
                     "url": None,
                     "doc_name": filename,
-                    "location": _location_from_attributes(result_dict.get("attributes")),
+                    "location": _location_from_attributes(result_dict.get("attributes")) or "unknown",
                     "snippet": snippet,
                     "retrieved_at": retrieved_at,
                 }

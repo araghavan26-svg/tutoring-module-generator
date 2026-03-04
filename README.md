@@ -85,12 +85,8 @@ What it checks:
 - Web evidence citations include non-empty URLs
 
 Docs-only optional check:
-- By default, if `samples/sample.txt` exists, the smoke test uploads it and runs a docs-only generation (`allow_web=false`).
-- To add a sample doc:
-  ```bash
-  mkdir -p samples
-  printf "Photosynthesis converts light energy into chemical energy in plants.\n" > samples/sample.txt
-  ```
+- By default, the smoke test uploads `samples/sample.txt` and runs a docs-only generation (`allow_web=false`).
+- The repo already includes `samples/sample.txt`. Replace it with your own text if needed.
 - To use a different file:
   ```bash
   python scripts/smoke_test.py --sample-file /absolute/path/your_sample.txt

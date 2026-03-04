@@ -147,6 +147,19 @@ def run_docs_only_smoke_test(client: TestClient, sample_file: Path, audience_lev
     upload_body = _post_or_fail(client, "/v1/docs/upload", files=files)
     vector_store_id = str(upload_body.get("vector_store_id", "")).strip()
     _assert(vector_store_id, "Upload response missing vector_store_id.")
+    docs = upload_body.get("docs", [])
+    _assert(isinstance(docs, list) and docs, "Upload response must include at least one doc metadata item.")
+    indexed_docs = 0
+    for item in docs:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", "")).strip().lower()
+        vector_file_id = str(item.get("vector_store_file_id", "")).strip()
+        if status in {"failed", "cancelled"}:
+            continue
+        if vector_file_id:
+            indexed_docs += 1
+    _assert(indexed_docs >= 1, "Expected at least one uploaded doc indexed into the vector store.")
 
     payload = {
         "topic": "Grounding docs-only smoke test",
@@ -172,13 +185,24 @@ def run_docs_only_smoke_test(client: TestClient, sample_file: Path, audience_lev
     }
 
     cited_ids: List[str] = []
+    doc_grounded_sections = 0
     for section in sections:
         if not isinstance(section, dict):
             continue
+        section_has_valid_doc = False
         for citation_id in section.get("citations") or []:
             evidence_id = str(citation_id).strip()
             if evidence_id:
                 cited_ids.append(evidence_id)
+                evidence = evidence_by_id.get(evidence_id)
+                if isinstance(evidence, dict) and str(evidence.get("source_type", "")).strip() == "doc":
+                    doc_name = str(evidence.get("doc_name", "")).strip()
+                    location = str(evidence.get("location", "")).strip()
+                    snippet = str(evidence.get("snippet", "")).strip()
+                    if doc_name and location and snippet:
+                        section_has_valid_doc = True
+        if section_has_valid_doc:
+            doc_grounded_sections += 1
 
     _assert(cited_ids, "Docs-only test expected at least one cited evidence item.")
     for evidence_id in cited_ids:
@@ -189,7 +213,12 @@ def run_docs_only_smoke_test(client: TestClient, sample_file: Path, audience_lev
             f"Docs-only citation '{evidence_id}' must have source_type='doc'.",
         )
         _assert(str(evidence.get("doc_name", "")).strip(), f"Docs-only citation '{evidence_id}' missing doc_name.")
+        _assert(str(evidence.get("location", "")).strip(), f"Docs-only citation '{evidence_id}' missing location.")
         _assert(str(evidence.get("snippet", "")).strip(), f"Docs-only citation '{evidence_id}' missing snippet.")
+    _assert(
+        doc_grounded_sections >= 2,
+        "Docs-only test expected at least 2 sections with doc citations containing doc_name/location/snippet.",
+    )
 
     print("Docs-only smoke test: PASS")
     print(f"- sample file: {sample_file}")
@@ -212,12 +241,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sample-file",
         default="samples/sample.txt",
-        help="Optional local txt file for docs-only smoke test.",
+        help="Local txt file for docs-only smoke test (runs by default unless --skip-doc-test).",
     )
     parser.add_argument(
         "--skip-doc-test",
         action="store_true",
-        help="Skip the docs-only smoke test even if sample file exists.",
+        help="Skip the docs-only smoke test.",
     )
     return parser.parse_args()
 
@@ -226,8 +255,9 @@ def main() -> int:
     args = parse_args()
     ensure_openai_api_key()
 
-    sample_file = Path(args.sample_file)
-    run_doc_test = sample_file.exists() and not args.skip_doc_test
+    sample_file_arg = Path(args.sample_file)
+    sample_file = sample_file_arg if sample_file_arg.is_absolute() else (ROOT_DIR / sample_file_arg)
+    run_doc_test = not args.skip_doc_test
 
     with TestClient(app) as client:
         run_web_smoke_test(client, topic=args.topic, audience_level=args.audience_level)
@@ -235,9 +265,7 @@ def main() -> int:
             run_docs_only_smoke_test(client, sample_file=sample_file, audience_level=args.audience_level)
         else:
             print("Docs-only smoke test: SKIPPED")
-            print(
-                f"- add a local text file at '{sample_file}' (or pass --sample-file) to run docs-only checks."
-            )
+            print(f"- rerun without --skip-doc-test to validate docs grounding using '{sample_file}'.")
 
     print("Smoke test complete: PASS")
     return 0
