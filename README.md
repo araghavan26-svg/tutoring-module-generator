@@ -79,6 +79,7 @@ python scripts/smoke_test.py
 
 What it checks:
 - Web-enabled generation (`allow_web=true`, no `vector_store_id`)
+- `source_policy` domain controls with `allowed_domains=["kids.britannica.com","www.vocabulary.com"]`
 - At least 3 sections
 - Each section has citations or `unverified=true`
 - Cited evidence has non-empty snippets
@@ -142,13 +143,23 @@ curl -X POST "http://127.0.0.1:8000/v1/modules/generate" \
       "Compare aerobic and anaerobic pathways"
     ],
     "allow_web": true,
+    "source_policy": {
+      "allow_web": true,
+      "web_recency_days": 30,
+      "allowed_domains": ["kids.britannica.com", "www.vocabulary.com"],
+      "blocked_domains": ["example.com"]
+    },
     "vector_store_id": "vs_123"
   }'
 ```
 
 Response shape:
-- `module`: `{module_id,title,sections,glossary,mcqs}`
-- `evidence_pack`: `[{evidence_id,source_type,title,url?,doc_name?,location?,snippet,retrieved_at}]`
+- `module`: `{module_id,title,overview,sections,glossary,mcqs,evidence_pack,source_policy}`
+- `evidence_pack`: `[{evidence_id,source_type,domain?,title,url?,doc_name?,location?,snippet,retrieved_at}]`
+
+Section shape now includes objective alignment fields:
+- `objective_index` (0-based)
+- `learning_goal`
 
 ### 3) Regenerate one section
 
@@ -163,6 +174,60 @@ curl -X POST "http://127.0.0.1:8000/v1/modules/<module_id>/regenerate" \
     "allow_web": true
   }'
 ```
+
+Cached-evidence edit loop endpoint:
+
+`POST /v1/modules/{module_id}/sections/{section_id}/regenerate`
+
+- Default behavior (`refresh_sources=false`): reuse cached module evidence pack, no retrieval.
+- Optional `refresh_sources=true`: refresh evidence pack first using stored `source_policy` + `vector_store_id`, then regenerate that section.
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/modules/<module_id>/sections/section-1/regenerate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "Tighten the explanation for clarity.",
+    "refresh_sources": false
+  }'
+```
+
+### 4) Refresh cached sources
+
+`POST /v1/modules/{module_id}/refresh_sources`
+
+Rebuilds and stores module-level `evidence_pack` and returns kept counts:
+- `evidence_count`
+- `doc_count`
+- `web_count`
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/modules/<module_id>/refresh_sources" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_policy": {
+      "allow_web": true,
+      "web_recency_days": 30,
+      "allowed_domains": ["kids.britannica.com", "www.vocabulary.com"],
+      "blocked_domains": ["example.com"]
+    }
+  }'
+```
+
+### 5) Export module
+
+`GET /v1/modules/{module_id}/export/json`
+
+Returns structured export with:
+- `title`
+- `overview`
+- `sections` (including `learning_goal`)
+- `glossary`
+- `mcqs` (including explanations)
+- `footnotes` (citation list)
+
+`GET /v1/modules/{module_id}/export/markdown`
+
+Returns a Markdown document with the same content and citation footnotes.
 
 ## Demo Script
 

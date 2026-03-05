@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Sequence
 from urllib.parse import urlparse
@@ -16,6 +17,8 @@ from .models import (
     ModuleGenerateRequest,
     ModuleSection,
     SectionRegenerateRequest,
+    SourcePolicy,
+    normalize_domain,
     utc_now,
 )
 
@@ -23,10 +26,11 @@ from .models import (
 MODULE_OUTPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["module_id", "title", "sections", "glossary", "mcqs"],
+    "required": ["module_id", "title", "overview", "sections", "glossary", "mcqs"],
     "properties": {
         "module_id": {"type": "string"},
         "title": {"type": "string"},
+        "overview": {"type": "string"},
         "sections": {
             "type": "array",
             "items": {
@@ -34,6 +38,8 @@ MODULE_OUTPUT_SCHEMA: Dict[str, Any] = {
                 "additionalProperties": False,
                 "required": [
                     "section_id",
+                    "objective_index",
+                    "learning_goal",
                     "heading",
                     "content",
                     "citations",
@@ -42,6 +48,8 @@ MODULE_OUTPUT_SCHEMA: Dict[str, Any] = {
                 ],
                 "properties": {
                     "section_id": {"type": "string"},
+                    "objective_index": {"type": "integer"},
+                    "learning_goal": {"type": "string"},
                     "heading": {"type": "string"},
                     "content": {"type": "string"},
                     "citations": {"type": "array", "items": {"type": "string"}},
@@ -83,9 +91,20 @@ MODULE_OUTPUT_SCHEMA: Dict[str, Any] = {
 SECTION_OUTPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["section_id", "heading", "content", "citations", "unverified", "unverified_reason"],
+    "required": [
+        "section_id",
+        "objective_index",
+        "learning_goal",
+        "heading",
+        "content",
+        "citations",
+        "unverified",
+        "unverified_reason",
+    ],
     "properties": {
         "section_id": {"type": "string"},
+        "objective_index": {"type": "integer"},
+        "learning_goal": {"type": "string"},
         "heading": {"type": "string"},
         "content": {"type": "string"},
         "citations": {"type": "array", "items": {"type": "string"}},
@@ -286,6 +305,45 @@ def _infer_title_from_url(url: str) -> str:
         return "Web source"
 
 
+def domain_matches_policy(domain: str, allowed_domains: Sequence[str] | None, blocked_domains: Sequence[str] | None) -> bool:
+    normalized = normalize_domain(domain)
+    if not normalized:
+        return False
+
+    blocked = [normalize_domain(item) for item in (blocked_domains or []) if normalize_domain(item)]
+    for blocked_domain in blocked:
+        if normalized == blocked_domain or normalized.endswith(f".{blocked_domain}"):
+            return False
+
+    allowed = [normalize_domain(item) for item in (allowed_domains or []) if normalize_domain(item)]
+    if not allowed:
+        return True
+    for allowed_domain in allowed:
+        if normalized == allowed_domain or normalized.endswith(f".{allowed_domain}"):
+            return True
+    return False
+
+
+@dataclass(frozen=True)
+class WebCandidateResult:
+    items: List[Dict[str, Any]]
+    filtered_out_by_policy: bool
+
+
+@dataclass(frozen=True)
+class EvidenceBuildResult:
+    evidence_pack: List[EvidenceItem]
+    web_unavailable_objectives: List[str]
+    objectives_without_evidence: List[str]
+
+
+def web_search_tool_args() -> Dict[str, Any]:
+    tool = {"type": "web_search", "search_context_size": "medium"}
+    if "filters" in tool:
+        raise AssertionError("web_search tool args must not include filters.")
+    return tool
+
+
 def _extract_web_candidates(
     client: OpenAI,
     *,
@@ -293,17 +351,25 @@ def _extract_web_candidates(
     audience_level: str,
     objective: str,
     max_results: int,
-) -> List[Dict[str, Any]]:
+    web_recency_days: int,
+    allowed_domains: Sequence[str] | None,
+    blocked_domains: Sequence[str] | None,
+) -> WebCandidateResult:
+    normalized_allowed = [normalize_domain(item) for item in (allowed_domains or []) if normalize_domain(item)]
+    normalized_blocked = [normalize_domain(item) for item in (blocked_domains or []) if normalize_domain(item)]
+
     prompt = (
         f"Topic: {topic}\n"
         f"Audience level: {audience_level}\n"
-        f"Learning objective: {objective}\n\n"
-        "Search the web and return evidence snippets for teaching this objective."
+        f"Learning objective: {objective}\n"
+        f"Recency requirement: prioritize sources from the last {max(1, web_recency_days)} days.\n\n"
+        "Search the web and return evidence snippets for teaching this objective. "
+        "Only use sources that satisfy domain policy constraints."
     )
     response = client.responses.create(
         model=settings.retrieval_model,
         input=prompt,
-        tools=[{"type": "web_search", "search_context_size": "medium"}],
+        tools=[web_search_tool_args()],
         tool_choice="required",
         include=["web_search_call.action.sources", "web_search_call.results"],
         text={
@@ -323,6 +389,8 @@ def _extract_web_candidates(
 
     retrieved_at = utc_now()
     parsed: List[Dict[str, Any]] = []
+    had_candidate_sources = False
+    policy_applied = bool(normalized_allowed or normalized_blocked)
     if isinstance(raw_items, list):
         for raw in raw_items:
             if not isinstance(raw, dict):
@@ -330,13 +398,18 @@ def _extract_web_candidates(
             title = _clean_text(raw.get("title")) or "Web source"
             url = _clean_text(raw.get("url"))
             snippet = _clean_text(raw.get("snippet"))
+            domain = normalize_domain(url)
             if not url or not snippet:
                 continue
+            had_candidate_sources = True
             if source_urls and url not in source_urls:
+                continue
+            if not domain_matches_policy(domain, normalized_allowed, normalized_blocked):
                 continue
             parsed.append(
                 {
                     "source_type": "web",
+                    "domain": domain,
                     "title": title,
                     "url": url,
                     "doc_name": None,
@@ -349,9 +422,16 @@ def _extract_web_candidates(
     if not parsed and source_urls:
         fallback_snippet = _clean_text(response_text(response))[:450] or "Relevant source retrieved via web search."
         for url, title in source_urls.items():
+            domain = normalize_domain(url)
+            if not domain:
+                continue
+            had_candidate_sources = True
+            if not domain_matches_policy(domain, normalized_allowed, normalized_blocked):
+                continue
             parsed.append(
                 {
                     "source_type": "web",
+                    "domain": domain,
                     "title": title or _infer_title_from_url(url),
                     "url": url,
                     "doc_name": None,
@@ -361,7 +441,11 @@ def _extract_web_candidates(
                 }
             )
 
-    return parsed[: max(1, max_results)]
+    filtered_out_by_policy = policy_applied and had_candidate_sources and not parsed
+    return WebCandidateResult(
+        items=parsed[: max(1, max_results)],
+        filtered_out_by_policy=filtered_out_by_policy,
+    )
 
 
 def build_evidence_pack(
@@ -372,44 +456,65 @@ def build_evidence_pack(
     learning_objectives: Sequence[str],
     allow_web: bool,
     vector_store_id: str | None,
+    source_policy: SourcePolicy | None = None,
     start_index: int = 1,
-) -> List[EvidenceItem]:
-    if not vector_store_id and not allow_web:
-        return []
+) -> EvidenceBuildResult:
+    policy = source_policy or SourcePolicy(allow_web=allow_web)
+    effective_allow_web = bool(policy.allow_web)
+    allowed_domains = policy.allowed_domains
+    blocked_domains = policy.blocked_domains
+
+    if not vector_store_id and not effective_allow_web:
+        return EvidenceBuildResult(
+            evidence_pack=[],
+            web_unavailable_objectives=[],
+            objectives_without_evidence=[_clean_text(item) for item in learning_objectives if _clean_text(item)],
+        )
 
     raw_candidates: List[Dict[str, Any]] = []
     retrieval_errors: List[str] = []
+    web_unavailable_objectives: List[str] = []
+    objectives_without_evidence: List[str] = []
     for objective in learning_objectives:
         objective_text = _clean_text(objective)
         if not objective_text:
             continue
+        objective_doc_count = 0
+        objective_web_count = 0
         if vector_store_id:
             try:
-                raw_candidates.extend(
-                    _extract_doc_candidates(
-                        client,
-                        vector_store_id=vector_store_id,
-                        topic=topic,
-                        audience_level=audience_level,
-                        objective=objective_text,
-                        max_results=settings.doc_results_per_objective,
-                    )
+                doc_items = _extract_doc_candidates(
+                    client,
+                    vector_store_id=vector_store_id,
+                    topic=topic,
+                    audience_level=audience_level,
+                    objective=objective_text,
+                    max_results=settings.doc_results_per_objective,
                 )
+                objective_doc_count = len(doc_items)
+                raw_candidates.extend(doc_items)
             except Exception as exc:
                 retrieval_errors.append(f"doc({objective_text}): {type(exc).__name__}: {exc}")
-        if allow_web:
+        if effective_allow_web:
             try:
-                raw_candidates.extend(
-                    _extract_web_candidates(
-                        client,
-                        topic=topic,
-                        audience_level=audience_level,
-                        objective=objective_text,
-                        max_results=settings.web_results_per_objective,
-                    )
+                web_result = _extract_web_candidates(
+                    client,
+                    topic=topic,
+                    audience_level=audience_level,
+                    objective=objective_text,
+                    max_results=settings.web_results_per_objective,
+                    web_recency_days=policy.web_recency_days,
+                    allowed_domains=allowed_domains,
+                    blocked_domains=blocked_domains,
                 )
+                objective_web_count = len(web_result.items)
+                raw_candidates.extend(web_result.items)
+                if web_result.filtered_out_by_policy:
+                    web_unavailable_objectives.append(objective_text)
             except Exception as exc:
                 retrieval_errors.append(f"web({objective_text}): {type(exc).__name__}: {exc}")
+        if objective_doc_count + objective_web_count == 0:
+            objectives_without_evidence.append(objective_text)
 
     if not raw_candidates and retrieval_errors:
         detail = " | ".join(retrieval_errors[:4])
@@ -435,6 +540,7 @@ def build_evidence_pack(
             EvidenceItem(
                 evidence_id=f"E{index:03d}",
                 source_type=item["source_type"],
+                domain=item.get("domain"),
                 title=item["title"],
                 url=item.get("url"),
                 doc_name=item.get("doc_name"),
@@ -444,17 +550,25 @@ def build_evidence_pack(
             )
         )
         index += 1
-    return evidence_pack
+    return EvidenceBuildResult(
+        evidence_pack=evidence_pack,
+        web_unavailable_objectives=sorted(set(web_unavailable_objectives)),
+        objectives_without_evidence=sorted(set(objectives_without_evidence)),
+    )
 
 
 def build_unverified_section(
     *,
     section_id: str,
+    objective_index: int,
+    learning_goal: str,
     heading: str,
     reason: str,
 ) -> ModuleSection:
     return ModuleSection(
         section_id=section_id,
+        objective_index=objective_index,
+        learning_goal=learning_goal,
         heading=heading,
         content="No verifiable instructional content could be generated from retrieved evidence.",
         citations=[],
@@ -469,23 +583,77 @@ def build_unverified_module(
     request: ModuleGenerateRequest,
     reason: str,
 ) -> Module:
-    headings = request.learning_objectives or [request.topic]
+    goals = (request.learning_objectives or [request.topic])[:6]
     sections: List[ModuleSection] = []
-    for idx, heading in enumerate(headings):
+    for idx, goal in enumerate(goals):
         sections.append(
             build_unverified_section(
                 section_id=f"section-{idx + 1}",
-                heading=heading or f"Section {idx + 1}",
+                objective_index=idx,
+                learning_goal=goal,
+                heading=goal or f"Section {idx + 1}",
                 reason=reason,
             )
         )
     return Module(
         module_id=module_id,
         title=f"{request.topic} - Grounded Tutoring Module",
+        overview=f"Introductory module for {request.audience_level} learners on {request.topic}.",
         sections=sections,
         glossary=[],
         mcqs=[],
     )
+
+
+def _enforce_objective_section_structure(
+    module: Module,
+    request: ModuleGenerateRequest,
+    *,
+    objectives_without_evidence: Sequence[str] | None = None,
+) -> Module:
+    goals = (request.learning_objectives or [request.topic])[:6]
+    missing_goals = set(item.strip() for item in (objectives_without_evidence or []) if item and item.strip())
+    enforced_sections: List[ModuleSection] = []
+    for idx, goal in enumerate(goals):
+        if idx < len(module.sections):
+            base = module.sections[idx]
+            citations = list(base.citations)
+            unverified = bool(base.unverified)
+            reason = _clean_text(base.unverified_reason)
+            if goal in missing_goals and not citations:
+                unverified = True
+                reason = reason or "No retrievable evidence was available for this learning objective."
+            enforced_sections.append(
+                base.model_copy(
+                    update={
+                        "section_id": f"section-{idx + 1}",
+                        "objective_index": idx,
+                        "learning_goal": goal,
+                        "heading": _clean_text(base.heading) or goal or f"Section {idx + 1}",
+                        "content": _clean_text(base.content)
+                        or "No verifiable instructional content could be generated from retrieved evidence.",
+                        "unverified": unverified,
+                        "unverified_reason": reason,
+                    }
+                )
+            )
+            continue
+
+        fallback_reason = "No section content was generated for this learning objective."
+        if goal in missing_goals:
+            fallback_reason = "No retrievable evidence was available for this learning objective."
+        enforced_sections.append(
+            build_unverified_section(
+                section_id=f"section-{idx + 1}",
+                objective_index=idx,
+                learning_goal=goal,
+                heading=goal or f"Section {idx + 1}",
+                reason=fallback_reason,
+            )
+        )
+
+    overview = _clean_text(module.overview) or f"Learning module for {request.topic}."
+    return module.model_copy(update={"overview": overview, "sections": enforced_sections})
 
 
 def generate_module_from_evidence(
@@ -494,6 +662,8 @@ def generate_module_from_evidence(
     request: ModuleGenerateRequest,
     evidence_pack: Sequence[EvidenceItem],
     module_id: str,
+    web_unavailable_objectives: Sequence[str] | None = None,
+    objectives_without_evidence: Sequence[str] | None = None,
 ) -> Module:
     if not evidence_pack:
         return build_unverified_module(
@@ -504,12 +674,15 @@ def generate_module_from_evidence(
 
     evidence_payload = [item.model_dump(mode="json") for item in evidence_pack]
     allowed_ids = [item.evidence_id for item in evidence_pack]
+    target_section_count = max(1, min(len(request.learning_objectives), 6))
     prompt_payload = {
         "module_request": {
             "topic": request.topic,
             "audience_level": request.audience_level,
             "learning_objectives": request.learning_objectives,
         },
+        "web_unavailable_objectives": list(web_unavailable_objectives or []),
+        "objectives_without_evidence": list(objectives_without_evidence or []),
         "allowed_evidence_ids": allowed_ids,
         "evidence_pack": evidence_payload,
     }
@@ -519,7 +692,11 @@ def generate_module_from_evidence(
         instructions=(
             "You are a tutoring-module generator.\n"
             "Use only evidence from evidence_pack. Never invent facts.\n"
+            f"Create exactly {target_section_count} sections, one per learning objective in order.\n"
+            "Each section must include objective_index and learning_goal.\n"
             "Every verified section must cite evidence_id values from allowed_evidence_ids.\n"
+            "If an objective appears in objectives_without_evidence, mark that section unverified.\n"
+            "If an objective appears in web_unavailable_objectives, web evidence was filtered by policy.\n"
             "If evidence is insufficient for a section, set unverified=true and explain why."
         ),
         input=json.dumps(prompt_payload, ensure_ascii=True),
@@ -536,7 +713,12 @@ def generate_module_from_evidence(
     )
     payload = parse_json_object(response_text(response))
     module = Module.model_validate(payload)
-    return module.model_copy(update={"module_id": module_id})
+    module = module.model_copy(update={"module_id": module_id})
+    return _enforce_objective_section_structure(
+        module,
+        request,
+        objectives_without_evidence=objectives_without_evidence,
+    )
 
 
 def generate_section_from_evidence(
@@ -551,6 +733,8 @@ def generate_section_from_evidence(
     if not evidence_pack:
         return build_unverified_section(
             section_id=target_section.section_id,
+            objective_index=target_section.objective_index,
+            learning_goal=target_section.learning_goal,
             heading=target_section.heading,
             reason="No evidence was retrieved for this regeneration request.",
         )
@@ -577,6 +761,7 @@ def generate_section_from_evidence(
         model=settings.generation_model,
         instructions=(
             "Regenerate one section using only evidence_pack.\n"
+            "Return objective_index and learning_goal fields for the section.\n"
             "For verified content, citations must contain valid evidence_id values.\n"
             "If evidence is insufficient, set unverified=true and provide unverified_reason."
         ),
@@ -597,6 +782,8 @@ def generate_section_from_evidence(
     return section.model_copy(
         update={
             "section_id": target_section.section_id,
+            "objective_index": target_section.objective_index,
+            "learning_goal": target_section.learning_goal,
             "heading": target_section.heading,
         }
     )
@@ -605,8 +792,12 @@ def generate_section_from_evidence(
 def enforce_quality_gate(module: Module, evidence_pack: Sequence[EvidenceItem]) -> Module:
     evidence_ids = {item.evidence_id for item in evidence_pack}
     normalized_sections: List[ModuleSection] = []
+    objective_indexes: List[int] = []
 
     for section in module.sections:
+        objective_indexes.append(section.objective_index)
+        if not _clean_text(section.learning_goal):
+            raise ValueError(f"Section '{section.heading}' is missing learning_goal.")
         citations = [item.strip() for item in section.citations if item and item.strip()]
         citations = list(dict.fromkeys(citations))
 
@@ -635,6 +826,10 @@ def enforce_quality_gate(module: Module, evidence_pack: Sequence[EvidenceItem]) 
                 }
             )
         )
+
+    expected_indexes = list(range(len(module.sections)))
+    if sorted(objective_indexes) != expected_indexes:
+        raise ValueError("Section objective_index values must span 0..n-1 with no gaps.")
 
     return module.model_copy(update={"sections": normalized_sections})
 

@@ -5,6 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from urllib.parse import urlparse
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -17,6 +18,7 @@ from app.main import app
 
 
 AZURE_WEB_SEARCH_HINT = "If using Azure, switch web_search to web_search_preview."
+SMOKE_ALLOWED_DOMAINS = ["kids.britannica.com", "www.vocabulary.com"]
 
 
 def _assert(condition: bool, message: str) -> None:
@@ -54,7 +56,35 @@ def _short_source(evidence: Dict[str, Any]) -> str:
     return str(evidence.get("doc_name", "")).strip() or "doc-source"
 
 
-def _validate_grounding_response(body: Dict[str, Any]) -> List[Tuple[str, str]]:
+def _normalize_domain(value: str) -> str:
+    raw = (value or "").strip().lower()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    host = (parsed.netloc or parsed.path or "").strip().lower()
+    host = host.split("/", 1)[0].strip(".")
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def _domain_matches(candidate: str, policy_domains: List[str]) -> bool:
+    normalized = _normalize_domain(candidate)
+    for domain in policy_domains:
+        check = _normalize_domain(domain)
+        if not check:
+            continue
+        if normalized == check or normalized.endswith(f".{check}"):
+            return True
+    return False
+
+
+def _validate_grounding_response(
+    body: Dict[str, Any],
+    *,
+    allowed_domains: List[str] | None = None,
+    blocked_domains: List[str] | None = None,
+) -> List[Tuple[str, str]]:
     module = body.get("module", {})
     sections = module.get("sections", [])
     evidence_pack = body.get("evidence_pack", [])
@@ -72,10 +102,19 @@ def _validate_grounding_response(body: Dict[str, Any]) -> List[Tuple[str, str]]:
             evidence_by_id[evidence_id] = item
 
     report_rows: List[Tuple[str, str]] = []
+    objective_indexes: List[int] = []
 
     for idx, section in enumerate(sections):
         _assert(isinstance(section, dict), f"Section at index {idx} is not an object.")
         heading = str(section.get("heading", "")).strip() or f"Section {idx + 1}"
+        learning_goal = str(section.get("learning_goal", "")).strip()
+        _assert(learning_goal, f"Section '{heading}' must include learning_goal.")
+        objective_index = section.get("objective_index")
+        _assert(
+            isinstance(objective_index, int),
+            f"Section '{heading}' objective_index must be an integer.",
+        )
+        objective_indexes.append(objective_index)
         citations = section.get("citations") or []
         unverified = bool(section.get("unverified", False))
 
@@ -96,6 +135,18 @@ def _validate_grounding_response(body: Dict[str, Any]) -> List[Tuple[str, str]]:
             if source_type == "web":
                 url = str(evidence.get("url", "")).strip()
                 _assert(url, f"Web evidence '{evidence_id}' must include a non-empty url.")
+                domain = str(evidence.get("domain", "")).strip().lower()
+                _assert(domain, f"Web evidence '{evidence_id}' must include a non-empty domain.")
+                if allowed_domains:
+                    _assert(
+                        _domain_matches(domain, allowed_domains),
+                        f"Web evidence '{evidence_id}' domain '{domain}' is outside allowed_domains.",
+                    )
+                if blocked_domains:
+                    _assert(
+                        not _domain_matches(domain, blocked_domains),
+                        f"Web evidence '{evidence_id}' domain '{domain}' is in blocked_domains.",
+                    )
 
             if first_citation_summary.startswith("none"):
                 title = str(evidence.get("title", "")).strip() or "Untitled source"
@@ -103,7 +154,57 @@ def _validate_grounding_response(body: Dict[str, Any]) -> List[Tuple[str, str]]:
 
         report_rows.append((heading, first_citation_summary))
 
+    expected_indexes = list(range(len(sections)))
+    _assert(
+        sorted(objective_indexes) == expected_indexes,
+        f"objective_index must span 0..{len(sections)-1} with no gaps.",
+    )
+
     return report_rows
+
+
+def _find_section_by_id(module: Dict[str, Any], section_id: str) -> Dict[str, Any]:
+    sections = module.get("sections", [])
+    _assert(isinstance(sections, list), "module.sections must be a list.")
+    for section in sections:
+        if isinstance(section, dict) and str(section.get("section_id", "")).strip() == section_id:
+            return section
+    raise AssertionError(f"Section '{section_id}' not found in module response.")
+
+
+def _assert_regenerated_section_valid(
+    body: Dict[str, Any],
+    *,
+    section_id: str,
+    expected_objective_index: int,
+    expected_learning_goal: str,
+) -> None:
+    module = body.get("module", {})
+    section = _find_section_by_id(module, section_id)
+
+    _assert(
+        section.get("objective_index") == expected_objective_index,
+        "Regenerated section objective_index changed unexpectedly.",
+    )
+    _assert(
+        str(section.get("learning_goal", "")).strip() == expected_learning_goal,
+        "Regenerated section learning_goal changed unexpectedly.",
+    )
+
+    citations = section.get("citations") or []
+    unverified = bool(section.get("unverified", False))
+    _assert(bool(citations) or unverified, "Regenerated section must have citations or unverified=true.")
+
+    evidence_pack = body.get("evidence_pack", [])
+    _assert(isinstance(evidence_pack, list), "Regeneration response evidence_pack must be a list.")
+    evidence_by_id = {
+        str(item.get("evidence_id", "")).strip(): item
+        for item in evidence_pack
+        if isinstance(item, dict) and str(item.get("evidence_id", "")).strip()
+    }
+    for citation_id in citations:
+        evidence_id = str(citation_id).strip()
+        _assert(evidence_id in evidence_by_id, f"Regenerated citation '{evidence_id}' missing from evidence_pack.")
 
 
 def _post_or_fail(client: TestClient, path: str, *, json_body: Dict[str, Any] | None = None, files: Any = None) -> Dict[str, Any]:
@@ -118,6 +219,12 @@ def _post_or_fail(client: TestClient, path: str, *, json_body: Dict[str, Any] | 
 
 
 def run_web_smoke_test(client: TestClient, topic: str, audience_level: str) -> None:
+    source_policy = {
+        "allow_web": True,
+        "web_recency_days": 30,
+        "allowed_domains": SMOKE_ALLOWED_DOMAINS,
+        "blocked_domains": None,
+    }
     payload = {
         "topic": topic,
         "audience_level": audience_level,
@@ -128,14 +235,62 @@ def run_web_smoke_test(client: TestClient, topic: str, audience_level: str) -> N
         ],
         "allow_web": True,
         "vector_store_id": None,
+        "source_policy": source_policy,
     }
 
     body = _post_or_fail(client, "/v1/modules/generate", json_body=payload)
-    report_rows = _validate_grounding_response(body)
+    report_rows = _validate_grounding_response(
+        body,
+        allowed_domains=SMOKE_ALLOWED_DOMAINS,
+        blocked_domains=[],
+    )
+    module = body.get("module", {})
+    sections = module.get("sections", [])
+    _assert(isinstance(sections, list) and sections, "Generated module must include sections.")
+    target_section = sections[0]
+    _assert(isinstance(target_section, dict), "First section must be an object.")
+    module_id = str(module.get("module_id", "")).strip()
+    _assert(module_id, "Generate response missing module_id.")
+    target_section_id = str(target_section.get("section_id", "")).strip()
+    _assert(target_section_id, "Generate response first section missing section_id.")
+    expected_objective_index = int(target_section.get("objective_index"))
+    expected_learning_goal = str(target_section.get("learning_goal", "")).strip()
+
+    regen_cached_body = _post_or_fail(
+        client,
+        f"/v1/modules/{module_id}/sections/{target_section_id}/regenerate",
+        json_body={
+            "instructions": "Tighten the explanation for clarity while staying evidence-grounded.",
+            "refresh_sources": False,
+        },
+    )
+    _assert_regenerated_section_valid(
+        regen_cached_body,
+        section_id=target_section_id,
+        expected_objective_index=expected_objective_index,
+        expected_learning_goal=expected_learning_goal,
+    )
+
+    regen_refreshed_body = _post_or_fail(
+        client,
+        f"/v1/modules/{module_id}/sections/{target_section_id}/regenerate",
+        json_body={
+            "instructions": "Refresh retrieval, then regenerate with concise language.",
+            "refresh_sources": True,
+        },
+    )
+    _assert_regenerated_section_valid(
+        regen_refreshed_body,
+        section_id=target_section_id,
+        expected_objective_index=expected_objective_index,
+        expected_learning_goal=expected_learning_goal,
+    )
 
     print("Web grounding smoke test: PASS")
     for heading, summary in report_rows:
         print(f"- {heading}: {summary}")
+    print(f"- cached regenerate section '{target_section_id}': PASS")
+    print(f"- refresh+regenerate section '{target_section_id}': PASS")
 
 
 def run_docs_only_smoke_test(client: TestClient, sample_file: Path, audience_level: str) -> None:
@@ -171,6 +326,12 @@ def run_docs_only_smoke_test(client: TestClient, sample_file: Path, audience_lev
         ],
         "allow_web": False,
         "vector_store_id": vector_store_id,
+        "source_policy": {
+            "allow_web": False,
+            "web_recency_days": 30,
+            "allowed_domains": None,
+            "blocked_domains": None,
+        },
     }
     body = _post_or_fail(client, "/v1/modules/generate", json_body=payload)
     report_rows = _validate_grounding_response(body)
