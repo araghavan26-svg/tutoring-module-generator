@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel create-shell">
+  <h1>Create Module</h1>
+  <p class="muted">Follow these steps and build your module like a writing workflow.</p>
+
+  <section class="how-panel">
+    <h2>How this works</h2>
+    <p>We retrieve sources first, then write each section only from evidence with citations.</p>
+  </section>
+
+  <ol id="wizard-progress" class="wizard-progress" aria-label="Create flow">
+    <li data-step="1" class="active">1. Topic</li>
+    <li data-step="2">2. Goals</li>
+    <li data-step="3">3. Sources</li>
+    <li data-step="4">4. Generate</li>
+  </ol>
+
+  <div id="create-error" class="alert error" hidden></div>
+  <div id="create-loading" class="loading-box" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    <span>Building your module... this may take a moment.</span>
+  </div>
+
+  <form id="create-form" class="form-grid">
+    <section class="step-card">
+      <p class="step-label">Step 1</p>
+      <h2>Topic</h2>
+      <label>
+        Topic
+        <input id="topic" name="topic" type="text" required placeholder="Photosynthesis" value="Photosynthesis" />
+      </label>
+      <p class="helper-text">Pick one topic you want learners to understand.</p>
+      <p class="field-example">Example: Photosynthesis</p>
+
+      <label>
+        Learner level
+        <input id="audience_level" name="audience_level" type="text" required placeholder="Middle school" value="Middle school" />
+      </label>
+      <p class="helper-text">Example: Elementary, Middle school, High school, Beginner adult.</p>
+      <p class="field-example">Example: Middle school</p>
+    </section>
+
+    <section class="step-card">
+      <p class="step-label">Step 2</p>
+      <h2>Learning goals</h2>
+      <label>
+        What should the learner be able to do?
+        <textarea
+          id="learning_objectives"
+          name="learning_objectives"
+          rows="5"
+          required
+          placeholder="Explain what photosynthesis is
+Identify key vocabulary
+Apply the idea in a simple example"
+        >Explain what photosynthesis is
+Identify key vocabulary
+Apply the idea in a simple example</textarea>
+      </label>
+      <p class="helper-text">Add one learning goal per line.</p>
+      <p class="field-example">Example goals: define the concept, identify key vocabulary, apply with a simple scenario.</p>
+    </section>
+
+    <section class="step-card">
+      <p class="step-label">Step 3</p>
+      <h2>Sources</h2>
+      <label class="inline-row">
+        <input id="allow_web" name="allow_web" type="checkbox" checked />
+        <span>Use web sources</span>
+      </label>
+      <p class="helper-text">Turn this off if you only want uploaded document sources.</p>
+
+      <details class="advanced-options">
+        <summary>Advanced source options</summary>
+
+        <label>
+          Allowed websites (optional)
+          <textarea id="allowed_domains" name="allowed_domains" rows="3" placeholder="kids.britannica.com
+www.vocabulary.com"></textarea>
+        </label>
+        <p class="helper-text">Only include evidence from these domains.</p>
+        <p class="field-example">Example: kids.britannica.com</p>
+
+        <label>
+          Blocked websites (optional)
+          <textarea id="blocked_domains" name="blocked_domains" rows="2" placeholder="example.com"></textarea>
+        </label>
+        <p class="helper-text">Always exclude these domains.</p>
+        <p class="field-example">Example: wikipedia.org</p>
+
+        <label>
+          Upload documents (.pdf or .txt)
+          <input id="files" name="files" type="file" multiple accept=".pdf,.txt,text/plain,application/pdf" />
+        </label>
+
+        {% if sample_doc_exists %}
+        <label class="inline-row">
+          <input id="use_sample_doc" name="use_sample_doc" type="checkbox" />
+          <span>Use sample document</span>
+        </label>
+        <p class="helper-text">Adds <code>samples/sample.txt</code> automatically when generating.</p>
+        {% endif %}
+      </details>
+    </section>
+
+    <section class="step-card">
+      <p class="step-label">Step 4</p>
+      <h2>Generate</h2>
+      <p class="helper-text">When you're ready, generate your module from the topic, goals, and source settings.</p>
+      <button class="btn btn-primary btn-large" id="create-submit" type="submit">Generate Module</button>
+    </section>
+  </form>
+
+  <p id="create-status" class="status" aria-live="polite"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.SAMPLE_DOC_EXISTS = {{ sample_doc_exists | tojson }};
+</script>
+<script src="/static/create.js"></script>
+{% endblock %}

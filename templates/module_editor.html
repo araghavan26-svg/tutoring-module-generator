@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel module-panel">
+  <div class="editor-action-bar">
+    <div class="editor-heading">
+      <p class="eyebrow">Module Editor</p>
+      <h1 id="module-title"></h1>
+    </div>
+    <div class="module-actions sticky-actions">
+      <button id="refresh-sources" class="btn btn-primary" type="button">Refresh sources</button>
+      <a class="btn btn-secondary" href="/v1/modules/{{ module_id }}/export/markdown" target="_blank" rel="noopener">Export Markdown</a>
+      <a class="btn btn-secondary" href="/v1/modules/{{ module_id }}/export/json" target="_blank" rel="noopener">Export JSON</a>
+    </div>
+  </div>
+
+  <p id="module-overview" class="muted"></p>
+  <p class="helper-text">Use Refresh sources if you want to look for new or different sources.</p>
+  <div id="module-summary-banner" class="summary-banner"></div>
+  <div id="editor-banner" class="alert success" hidden></div>
+
+  <div class="editor-layout">
+    <aside class="toc-sidebar">
+      <h2>Sections</h2>
+      <nav id="section-toc" class="toc-list"></nav>
+    </aside>
+
+    <section class="editor-main">
+      <div class="regen-controls">
+        <p class="helper-text">Tip: add section-specific guidance below each section before improving it.</p>
+        <label class="inline-row">
+          <input id="regen-refresh" type="checkbox" />
+          <span>Refresh sources before improving a section</span>
+        </label>
+      </div>
+
+      <div id="sections" class="sections"></div>
+    </section>
+  </div>
+
+  <div class="regen-controls">
+    <button id="scroll-top" type="button" class="btn btn-secondary">Back to top</button>
+  </div>
+  <p id="editor-status" class="status" aria-live="polite"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.MODULE_ID = "{{ module_id }}";
+  window.INITIAL_MODULE = {{ initial_module | tojson }};
+</script>
+<script src="/static/module_editor.js"></script>
+{% endblock %}

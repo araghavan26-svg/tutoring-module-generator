@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from .config import ensure_openai_api_key
 from .models import (
@@ -46,6 +48,13 @@ app = FastAPI(
         "(2) generate module from evidence with tools disabled."
     ),
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+templates = Jinja2Templates(directory=str(PROJECT_ROOT / "templates"))
+app.mount("/static", StaticFiles(directory=str(PROJECT_ROOT / "static")), name="static")
+SAMPLES_DIR = PROJECT_ROOT / "samples"
+if SAMPLES_DIR.exists():
+    app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
 
 
 def _build_module_footnotes(module_data: Dict[str, Any], evidence_pack: List[Any]) -> List[Dict[str, Any]]:
@@ -253,6 +262,50 @@ def _normalize_regenerated_section(section: Any, evidence_pack: List[EvidenceIte
 @app.on_event("startup")
 def enforce_byok_startup_check() -> None:
     ensure_openai_api_key()
+
+
+@app.get("/")
+def landing_page(request: Request) -> Response:
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "title": "ModuleForge",
+        },
+    )
+
+
+@app.get("/create")
+def create_page(request: Request) -> Response:
+    sample_doc_path = SAMPLES_DIR / "sample.txt"
+    return templates.TemplateResponse(
+        "create.html",
+        {
+            "request": request,
+            "title": "Create Module",
+            "sample_doc_exists": sample_doc_path.exists(),
+        },
+    )
+
+
+@app.get("/modules/{module_id}")
+def module_editor_page(request: Request, module_id: str) -> Response:
+    record = module_store.get(module_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Module not found.")
+
+    module_data = record.module.model_dump(mode="json")
+    module_data["evidence_pack"] = [item.model_dump(mode="json") for item in _current_evidence_pack(record)]
+    module_data["source_policy"] = _current_source_policy(record).model_dump(mode="json")
+    return templates.TemplateResponse(
+        "module_editor.html",
+        {
+            "request": request,
+            "title": "Module Editor",
+            "module_id": module_id,
+            "initial_module": module_data,
+        },
+    )
 
 
 @app.get("/health")

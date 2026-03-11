@@ -21,6 +21,16 @@ tutoring_module_api/
     openai_service.py
     store.py
     config.py
+  templates/
+    base.html
+    index.html
+    create.html
+    module_editor.html
+  static/
+    style.css
+    create.js
+    module_editor.js
+  start_app.command
   scripts/
     demo_generate.py
   requirements.txt
@@ -99,12 +109,44 @@ Docs-only optional check:
 
 ## Run
 
+Mac quick start (non-technical):
+
+1. Double-click `start_app.command`
+2. Wait for the browser to open `http://127.0.0.1:8000`
+
+The script will:
+- activate `.venv`
+- install requirements if needed
+- start Uvicorn
+- open the app in your default browser
+
+Terminal option:
+
 ```bash
 cd "/Users/araghavan26/Documents/New project/tutoring_module_api"
 uvicorn app.main:app --reload --port 8000
 ```
 
 The server performs a startup BYOK check and fails fast if `OPENAI_API_KEY` is missing.
+
+## Creator Web UI
+
+After starting the server, open:
+- `GET /` landing page
+- `GET /create` module creation form
+- `GET /modules/{module_id}` module editor page
+
+Guided first-use flow:
+1. Click **Create a Module** (or **Try Sample Module**).
+2. Fill in topic and learning goals.
+3. Choose source options and generate.
+
+The UI uses minimal HTML + JS and calls API endpoints:
+- `POST /v1/docs/upload`
+- `POST /v1/modules/generate`
+- `POST /v1/modules/{module_id}/sections/{section_id}/regenerate`
+- `POST /v1/modules/{module_id}/refresh_sources`
+- `GET /v1/modules/{module_id}/export/markdown`
 
 ## Health Endpoints
 

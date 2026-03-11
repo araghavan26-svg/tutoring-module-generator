@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "ModuleForge" }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">ModuleForge</a>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/create">Create</a>
+      </nav>
+    </header>
+    <main class="page-shell">{% block content %}{% endblock %}</main>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>
