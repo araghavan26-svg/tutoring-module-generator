@@ -37,14 +37,17 @@ tutoring_module_api/
   README.md
 ```
 
-## Install
+## Quick Start
 
-```bash
-cd "/Users/araghavan26/Documents/New project/tutoring_module_api"
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+1. Double-click `start_app.command`
+2. Wait for the browser to open `http://127.0.0.1:8000`
+3. If startup says the API key is missing, complete the BYOK setup below and launch again
+
+`start_app.command` is the main way to launch the app for exhibition use. It will:
+- create or reuse `.venv`
+- install requirements
+- start Uvicorn
+- open the app in your default browser
 
 ## BYOK Setup
 
@@ -66,7 +69,7 @@ Warning:
 Note:
 - ChatGPT Free/Plus subscriptions are separate from OpenAI API billing and API keys.
 
-## Startup Check (env loaded)
+## Optional Startup Check
 
 Run this before starting the server:
 
@@ -107,27 +110,10 @@ Docs-only optional check:
   python scripts/smoke_test.py --skip-doc-test
   ```
 
-## Run
+## Demo Reset
 
-Mac quick start (non-technical):
-
-1. Double-click `start_app.command`
-2. Wait for the browser to open `http://127.0.0.1:8000`
-
-The script will:
-- activate `.venv`
-- install requirements if needed
-- start Uvicorn
-- open the app in your default browser
-
-Terminal option:
-
-```bash
-cd "/Users/araghavan26/Documents/New project/tutoring_module_api"
-uvicorn app.main:app --reload --port 8000
-```
-
-The server performs a startup BYOK check and fails fast if `OPENAI_API_KEY` is missing.
+1. Double-click `reset_demo_state.command`
+2. This clears saved modules, version history, and cached evidence so the next demo starts clean
 
 ## Creator Web UI
 
@@ -140,6 +126,12 @@ Guided first-use flow:
 1. Click **Create a Module** (or **Try Sample Module**).
 2. Fill in topic and learning goals.
 3. Choose source options and generate.
+
+Demo-friendly path:
+1. Click **Try Sample Module**
+2. Leave **Use web sources** on
+3. Leave **Use sample document** checked if it appears
+4. Generate for a fast, polished first example
 
 The UI uses minimal HTML + JS and calls API endpoints:
 - `POST /v1/docs/upload`
@@ -154,6 +146,15 @@ The UI uses minimal HTML + JS and calls API endpoints:
 - `GET /healthz` -> `{"status":"ok"}`
 
 Neither endpoint returns secrets.
+
+## Advanced Terminal Launch (Optional)
+
+If you need it for development, you can still launch manually:
+
+```bash
+cd "/Users/araghavan26/Documents/New project/tutoring_module_api"
+./.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+```
 
 ## API Endpoints
 

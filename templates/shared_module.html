@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel shared-panel">
+  <p class="eyebrow">Shared module</p>
+  <h1>{{ module.title }}</h1>
+  <p class="helper-text">This is a read-only shared copy.</p>
+
+  <section class="summary-banner shared-banner">
+    <span>{{ module.sections | length }} sections</span>
+    <span>{{ footnotes | length }} cited sources</span>
+  </section>
+
+  <section class="shared-overview">
+    <h2>Overview</h2>
+    <p>{{ module.overview or "No overview provided." }}</p>
+  </section>
+
+  <section class="sections">
+    {% for section in module.sections %}
+    <article class="section-card">
+      <h3>{{ section.heading }}</h3>
+      <p class="section-meta">Objective #{{ section.objective_index }} - {{ section.learning_goal or "No learning goal provided." }}</p>
+      <div class="section-content">{{ section.content }}</div>
+      {% if section.citations %}
+      <section class="section-citations">
+        <h4>Sources</h4>
+        <ul class="citation-list">
+          {% for citation_id in section.citations %}
+          {% set note = footnotes_by_id.get(citation_id) %}
+          {% if note %}
+          <li>
+            {% if note.url %}
+            <a class="citation-card citation-link" href="{{ note.url }}" target="_blank" rel="noopener noreferrer">
+              <span class="citation-kicker">{{ note.domain or "Web source" }}</span>
+              <strong>{{ note.title }}</strong>
+              <span class="citation-open">Open source</span>
+              {% if note.snippet %}
+              <span class="citation-snippet">{{ note.snippet }}</span>
+              {% endif %}
+            </a>
+            {% else %}
+            <div class="citation-card citation-doc-card-static">
+              <span class="citation-kicker">Document source</span>
+              <strong>{{ note.doc_name or note.title }}</strong>
+              <span class="citation-subline">{{ note.location or "Location not available" }}</span>
+              {% if note.snippet %}
+              <span class="citation-snippet">{{ note.snippet }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+          </li>
+          {% endif %}
+          {% endfor %}
+        </ul>
+      </section>
+      {% elif section.unverified %}
+      <p class="section-change-note">{{ section.unverified_reason or "This section could not be verified from the saved sources." }}</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </section>
+
+  <section class="shared-stack">
+    <article class="step-card">
+      <h2>Glossary</h2>
+      {% if module.glossary %}
+      <ul class="shared-list">
+        {% for item in module.glossary %}
+        <li><strong>{{ item.term }}</strong>: {{ item.definition }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="helper-text">No glossary terms were included.</p>
+      {% endif %}
+    </article>
+
+    <article class="step-card">
+      <h2>Practice Questions</h2>
+      {% if module.mcqs %}
+      <ol class="shared-mcq-list">
+        {% for mcq in module.mcqs %}
+        <li>
+          <strong>{{ mcq.question }}</strong>
+          {% if mcq.options %}
+          <ul class="shared-list">
+            {% for option in mcq.options %}
+            <li>{{ option }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          {% if mcq.explanation %}
+          <p class="helper-text">Explanation: {{ mcq.explanation }}</p>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="helper-text">No practice questions were included.</p>
+      {% endif %}
+    </article>
+
+    <article class="step-card">
+      <h2>Citations</h2>
+      {% if footnotes %}
+      <ul class="citation-list">
+        {% for note in footnotes %}
+        <li>
+          {% if note.url %}
+          <a class="citation-card citation-link" href="{{ note.url }}" target="_blank" rel="noopener noreferrer">
+            <span class="citation-kicker">{{ note.domain or "Web source" }}</span>
+            <strong>{{ note.title }}</strong>
+            <span class="citation-open">Open source</span>
+            {% if note.snippet %}
+            <span class="citation-snippet">{{ note.snippet }}</span>
+            {% endif %}
+          </a>
+          {% else %}
+          <div class="citation-card citation-doc-card-static">
+            <span class="citation-kicker">Document source</span>
+            <strong>{{ note.doc_name or note.title }}</strong>
+            <span class="citation-subline">{{ note.location or "Location not available" }}</span>
+            {% if note.snippet %}
+            <span class="citation-snippet">{{ note.snippet }}</span>
+            {% endif %}
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="helper-text">No citations were attached to this shared module.</p>
+      {% endif %}
+    </article>
+  </section>
+</section>
+{% endblock %}

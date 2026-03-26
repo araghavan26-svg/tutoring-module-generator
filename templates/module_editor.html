@@ -5,24 +5,128 @@
   <div class="editor-action-bar">
     <div class="editor-heading">
       <p class="eyebrow">Module Editor</p>
-      <h1 id="module-title"></h1>
+      <div class="inline-heading">
+        <h1 id="module-title"></h1>
+        <span id="share-badge" class="share-badge" hidden>Shared</span>
+      </div>
     </div>
     <div class="module-actions sticky-actions">
       <button id="refresh-sources" class="btn btn-primary" type="button">Refresh sources</button>
       <a class="btn btn-secondary" href="/v1/modules/{{ module_id }}/export/markdown" target="_blank" rel="noopener">Export Markdown</a>
       <a class="btn btn-secondary" href="/v1/modules/{{ module_id }}/export/json" target="_blank" rel="noopener">Export JSON</a>
+      <button id="create-assignment" class="btn btn-secondary" type="button">Create assignment</button>
+      <button id="share-module" class="btn btn-secondary" type="button">Share module</button>
+      <button id="copy-share-link" class="btn btn-secondary" type="button" hidden>Copy shared link</button>
     </div>
   </div>
+
+  <section id="share-panel" class="share-panel" hidden>
+    <label for="share-link" class="section-guidance-label">Public share link</label>
+    <div class="share-link-row">
+      <input id="share-link" type="text" readonly />
+      <a id="open-share-link" class="btn btn-secondary btn-small" href="#" target="_blank" rel="noopener noreferrer">Open shared page</a>
+    </div>
+    <p class="helper-text">Anyone with this link can view a read-only copy of this module.</p>
+  </section>
 
   <p id="module-overview" class="muted"></p>
   <p class="helper-text">Use Refresh sources if you want to look for new or different sources.</p>
   <div id="module-summary-banner" class="summary-banner"></div>
-  <div id="editor-banner" class="alert success" hidden></div>
+  <div id="editor-banner" class="alert info" hidden></div>
+
+  <section class="tutor-panel">
+    <h2>Ask a question about this module</h2>
+    <p class="helper-text">Answers stay grounded in this module's saved sources. If support is weak, the tutor will say so.</p>
+    <div class="tutor-mode-row" id="tutor-modes">
+      <label class="tutor-mode-option">
+        <input type="radio" name="tutor-mode" value="default" checked />
+        <span>Default</span>
+      </label>
+      <label class="tutor-mode-option">
+        <input type="radio" name="tutor-mode" value="simpler" />
+        <span>Simpler</span>
+      </label>
+      <label class="tutor-mode-option">
+        <input type="radio" name="tutor-mode" value="more_detailed" />
+        <span>More detailed</span>
+      </label>
+      <label class="tutor-mode-option">
+        <input type="radio" name="tutor-mode" value="quiz_me" />
+        <span>Quiz me</span>
+      </label>
+    </div>
+    <div class="tutor-suggestions" id="tutor-suggestions"></div>
+    <div id="quiz-prompt-card" class="quiz-prompt-card" hidden>
+      <p class="eyebrow">Current Quiz Question</p>
+      <p id="quiz-prompt-text"></p>
+    </div>
+    <label for="tutor-question" class="section-guidance-label">Ask a question about this module</label>
+    <textarea
+      id="tutor-question"
+      rows="3"
+      placeholder="Example: What role does chlorophyll play in photosynthesis?"
+    ></textarea>
+    <div class="module-actions">
+      <button id="tutor-ask" class="btn btn-primary" type="button">Ask the tutor</button>
+    </div>
+    <div id="tutor-history" class="tutor-history"></div>
+  </section>
+
+  <section class="tutor-panel assignment-panel" id="assignment-panel">
+    <h2>Assignment</h2>
+    <p class="helper-text">Create a ready-to-use assignment prompt and rubric from this module, then grade a student response against it.</p>
+    <div class="module-actions">
+      <button id="assignment-generate" class="btn btn-primary" type="button">Create assignment</button>
+    </div>
+    <div id="assignment-status" class="status" aria-live="polite"></div>
+    <div id="assignment-empty" class="empty-subpanel">
+      <p class="empty-title">No assignment yet.</p>
+      <p class="helper-text">Click Create assignment to generate a prompt and rubric from this module.</p>
+    </div>
+    <div id="assignment-output" hidden>
+      <div class="assignment-block">
+        <p class="assignment-label">Prompt</p>
+        <div id="assignment-prompt" class="assignment-prompt"></div>
+      </div>
+      <div class="assignment-block">
+        <p class="assignment-label">Rubric</p>
+        <div id="assignment-rubric" class="assignment-rubric"></div>
+      </div>
+      <div class="module-actions">
+        <button id="assignment-export-markdown" class="btn btn-secondary" type="button">Export Assignment Markdown</button>
+        <button id="assignment-export-json" class="btn btn-secondary" type="button">Export Assignment JSON</button>
+      </div>
+      <label for="student-response" class="section-guidance-label">Student response</label>
+      <textarea
+        id="student-response"
+        rows="5"
+        placeholder="Paste or type the student response here."
+      ></textarea>
+      <div class="module-actions">
+        <button id="assignment-grade" class="btn btn-emphasis" type="button">Grade response</button>
+      </div>
+      <div id="assignment-grade-output" class="assignment-grade-output" hidden>
+        <div class="assignment-grade-summary">
+          <span class="assignment-score-label">Score</span>
+          <strong id="assignment-score"></strong>
+          <span id="assignment-grade-badge" class="tutor-badge tutor-badge-grounded">Grounded</span>
+        </div>
+        <p id="assignment-feedback" class="assignment-feedback"></p>
+        <div id="assignment-breakdown" class="assignment-breakdown"></div>
+      </div>
+    </div>
+  </section>
 
   <div class="editor-layout">
     <aside class="toc-sidebar">
       <h2>Sections</h2>
       <nav id="section-toc" class="toc-list"></nav>
+
+      <div class="history-panel">
+        <h2>History</h2>
+        <p class="helper-text">Restore an earlier version if you want to undo a change.</p>
+        <div id="module-history" class="history-list"></div>
+      </div>
     </aside>
 
     <section class="editor-main">
@@ -49,6 +153,7 @@
 <script>
   window.MODULE_ID = "{{ module_id }}";
   window.INITIAL_MODULE = {{ initial_module | tojson }};
+  window.INITIAL_HISTORY = {{ initial_history | tojson }};
 </script>
 <script src="/static/module_editor.js"></script>
 {% endblock %}

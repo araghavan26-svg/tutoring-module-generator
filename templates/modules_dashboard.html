@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <p class="eyebrow">Saved modules</p>
+  <h1 class="library-title">Your module library</h1>
+  <p class="helper-text">Open a saved module, export it, or remove it from local storage.</p>
+  <div id="library-banner" class="alert info" hidden></div>
+
+  <div class="library-list" id="module-library" {% if not modules %}hidden{% endif %}>
+    {% for module in modules %}
+    <article class="library-card" data-module-id="{{ module.module_id }}">
+      <div class="library-copy">
+        <div class="library-title-row">
+          <h2>{{ module.title }}</h2>
+          <span class="share-badge library-share-badge" {% if not module.share_enabled %}hidden{% endif %}>Shared</span>
+        </div>
+        <p class="library-meta">Module ID: {{ module.module_id }}</p>
+        <p class="library-meta">Created: {{ module.created_label }}</p>
+        <p class="library-meta">Updated: {{ module.updated_label }}</p>
+        <p class="library-meta">Sections: {{ module.section_count }}</p>
+        <p class="library-meta share-state">Sharing: {{ "On" if module.share_enabled else "Off" }}</p>
+        <div class="library-share" {% if not module.share_enabled %}hidden{% endif %}>
+          <label class="helper-text" for="share-link-{{ module.module_id }}">Shared link</label>
+          <div class="share-link-row">
+            <input
+              id="share-link-{{ module.module_id }}"
+              class="share-link-input"
+              type="text"
+              readonly
+              value="{{ module.share_url or '' }}"
+            />
+            <a
+              class="btn btn-secondary btn-small open-share-link"
+              href="{{ module.share_url or '#' }}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open shared page
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="library-actions">
+        <a class="btn btn-primary" href="/modules/{{ module.module_id }}">Open</a>
+        <a class="btn btn-secondary" href="/v1/modules/{{ module.module_id }}/export/markdown" target="_blank" rel="noopener">Export Markdown</a>
+        <button
+          class="btn btn-secondary share-module-btn"
+          type="button"
+          data-module-id="{{ module.module_id }}"
+          data-share-enabled="{{ 'true' if module.share_enabled else 'false' }}"
+        >
+          {{ "Disable sharing" if module.share_enabled else "Share module" }}
+        </button>
+        <button
+          class="btn btn-secondary btn-small copy-share-btn"
+          type="button"
+          data-module-id="{{ module.module_id }}"
+          {% if not module.share_enabled %}hidden{% endif %}
+        >
+          Copy link
+        </button>
+        <button class="btn btn-secondary delete-module-btn" type="button" data-module-id="{{ module.module_id }}">Delete</button>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="empty-library" id="empty-library" {% if modules %}hidden{% endif %}>
+    <p class="empty-title">No saved modules yet.</p>
+    <p class="helper-text">Create a new module or open the sample flow for a fast, demo-ready example.</p>
+    <div class="module-actions">
+      <a class="btn btn-primary" href="/create">Create your first module</a>
+      <a class="btn btn-secondary" href="/create?sample=1">Try Sample Module</a>
+    </div>
+  </div>
+
+  <p id="library-status" class="status" aria-live="polite"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/modules_dashboard.js"></script>
+{% endblock %}

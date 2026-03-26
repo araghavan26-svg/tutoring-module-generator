@@ -3,48 +3,47 @@
 {% block content %}
 <section class="panel create-shell">
   <h1>Create Module</h1>
-  <p class="muted">Follow these steps and build your module like a writing workflow.</p>
+  <p class="muted">Set up a grounded lesson in a few clear steps.</p>
 
   <section class="how-panel">
     <h2>How this works</h2>
-    <p>We retrieve sources first, then write each section only from evidence with citations.</p>
+    <p>We find sources first, then build each section only from evidence with citations so the lesson stays grounded and trustworthy.</p>
   </section>
 
   <ol id="wizard-progress" class="wizard-progress" aria-label="Create flow">
-    <li data-step="1" class="active">1. Topic</li>
-    <li data-step="2">2. Goals</li>
-    <li data-step="3">3. Sources</li>
+    <li data-step="1" class="active">1. What do you want to learn?</li>
+    <li data-step="2">2. Personalize your learning</li>
+    <li data-step="3">3. Choose sources</li>
     <li data-step="4">4. Generate</li>
   </ol>
 
+  <div id="create-demo-banner" class="alert info" hidden></div>
   <div id="create-error" class="alert error" hidden></div>
-  <div id="create-loading" class="loading-box" hidden>
-    <span class="spinner" aria-hidden="true"></span>
-    <span>Building your module... this may take a moment.</span>
-  </div>
 
   <form id="create-form" class="form-grid">
     <section class="step-card">
       <p class="step-label">Step 1</p>
-      <h2>Topic</h2>
+      <h2>What do you want to learn?</h2>
       <label>
-        Topic
-        <input id="topic" name="topic" type="text" required placeholder="Photosynthesis" value="Photosynthesis" />
+        What do you want to learn?
+        <input
+          id="learning_request"
+          name="learning_request"
+          type="text"
+          required
+          placeholder="Biology - Photosynthesis"
+          value="Biology - Photosynthesis"
+          list="learning-request-examples"
+        />
       </label>
-      <p class="helper-text">Pick one topic you want learners to understand.</p>
-      <p class="field-example">Example: Photosynthesis</p>
+      <p class="helper-text">You can type a subject and topic together. If you use a separator like <code> - </code> or <code>:</code>, we will split it automatically.</p>
+      <p class="field-example">Examples: Biology - Photosynthesis, Statistics - Probability, History - French Revolution</p>
+      <datalist id="learning-request-examples">
+        <option value="Biology - Photosynthesis"></option>
+        <option value="Statistics - Probability"></option>
+        <option value="History - French Revolution"></option>
+      </datalist>
 
-      <label>
-        Learner level
-        <input id="audience_level" name="audience_level" type="text" required placeholder="Middle school" value="Middle school" />
-      </label>
-      <p class="helper-text">Example: Elementary, Middle school, High school, Beginner adult.</p>
-      <p class="field-example">Example: Middle school</p>
-    </section>
-
-    <section class="step-card">
-      <p class="step-label">Step 2</p>
-      <h2>Learning goals</h2>
       <label>
         What should the learner be able to do?
         <textarea
@@ -59,18 +58,136 @@ Apply the idea in a simple example"
 Identify key vocabulary
 Apply the idea in a simple example</textarea>
       </label>
-      <p class="helper-text">Add one learning goal per line.</p>
+      <p class="helper-text">Add one learning goal per line. We will clean these up into stronger instructional goals before generating.</p>
       <p class="field-example">Example goals: define the concept, identify key vocabulary, apply with a simple scenario.</p>
+    </section>
+
+    <section class="step-card personalize-card">
+      <p class="step-label">Step 2</p>
+      <h2>Personalize your learning</h2>
+      <p class="helper-text">These settings help tailor the lesson's depth, pace, tone, and starting point.</p>
+
+      <div class="preset-row" aria-label="Quick-start presets">
+        <button type="button" class="btn btn-secondary btn-pill" id="preset-learn-scratch">Learn from scratch</button>
+        <button type="button" class="btn btn-secondary btn-pill" id="preset-study-test">Study for a test</button>
+        <button type="button" class="btn btn-secondary btn-pill" id="preset-quick-review">Quick review</button>
+      </div>
+      <p class="field-example">Choose a preset for a fast start, or adjust the fields below.</p>
+
+      <div class="personalize-grid">
+        <div>
+      <label>
+        Learner level
+        <select id="audience_level" name="audience_level" required>
+          <option selected>Beginner</option>
+          <option>Intermediate</option>
+          <option>Advanced / AP</option>
+          <option>Custom</option>
+        </select>
+      </label>
+          <p class="helper-text">Choose the closest match so we can set the right depth and pacing.</p>
+          <p class="field-example">Example: Beginner</p>
+        </div>
+
+      <div id="custom_level_wrap" hidden>
+        <label>
+          Describe your level
+          <input
+            id="custom_level_description"
+            name="custom_level_description"
+            type="text"
+            placeholder="Example: Adult beginner returning to science"
+          />
+        </label>
+        <p class="helper-text">Use this when the preset levels do not fit.</p>
+      </div>
+
+        <div>
+      <label>
+        Current familiarity with the topic
+        <select id="current_familiarity" name="current_familiarity">
+          <option selected>Brand new</option>
+          <option>I know a little</option>
+          <option>I know the basics</option>
+          <option>I want a deeper review</option>
+          <option>I'm advanced but want structured practice</option>
+        </select>
+      </label>
+          <p class="helper-text">This helps the module decide whether to start with basics or skip ahead.</p>
+          <p class="field-example">Example: Brand new</p>
+        </div>
+
+        <div>
+      <label>
+        Learning purpose
+        <select id="learning_purpose" name="learning_purpose">
+          <option selected>Learn from scratch</option>
+          <option>Review for a test</option>
+          <option>Understand a confusing concept</option>
+          <option>Practice applying ideas</option>
+          <option>Prepare to write about it</option>
+          <option>Build an assignment / lesson</option>
+        </select>
+      </label>
+          <p class="helper-text">Tell the tutor what this module is for so it can shape the lesson around that goal.</p>
+          <p class="field-example">Example: Understand a confusing concept</p>
+        </div>
+
+        <div>
+      <label>
+        Explanation style
+        <select id="explanation_style" name="explanation_style">
+          <option>Simple and beginner-friendly</option>
+          <option selected>Step-by-step</option>
+          <option>Example-heavy</option>
+          <option>Formal/academic</option>
+          <option>Quiz-focused</option>
+          <option>Concise review</option>
+        </select>
+      </label>
+          <p class="helper-text">Choose how you want the teaching voice and structure to feel.</p>
+          <p class="field-example">Example: Step-by-step</p>
+        </div>
+      </div>
+
+      <label>
+        What specifically confuses you or what do you want extra help with?
+        <textarea
+          id="confusion_points"
+          name="confusion_points"
+          rows="3"
+          placeholder="Example: I get mixed up about how chlorophyll, sunlight, and glucose connect."
+        ></textarea>
+      </label>
+      <p class="helper-text">Optional, but useful when you want the module to slow down around one hard part.</p>
     </section>
 
     <section class="step-card">
       <p class="step-label">Step 3</p>
-      <h2>Sources</h2>
+      <h2>Choose sources</h2>
+      <p class="helper-text">Sources help the system make the lesson more trustworthy and tailored.</p>
       <label class="inline-row">
         <input id="allow_web" name="allow_web" type="checkbox" checked />
         <span>Use web sources</span>
       </label>
       <p class="helper-text">Turn this off if you only want uploaded document sources.</p>
+      <label>
+        What kind of sources do you want?
+        <select id="source_preference" name="source_preference">
+          <option selected>General</option>
+          <option>Academic / Educational</option>
+          <option>Beginner-friendly</option>
+          <option>Mixed</option>
+        </select>
+      </label>
+      <p class="helper-text">Choose the source style you want when you are not explicitly limiting domains.</p>
+      <p class="field-example">Example: Academic / Educational for classroom or course-style topics.</p>
+      <label class="inline-row">
+        <input id="prefer_high_trust_sources" name="prefer_high_trust_sources" type="checkbox" />
+        <span>Prefer high-trust sources</span>
+      </label>
+      <p class="helper-text">This nudges retrieval toward stronger educational, university, government, and reference sources where possible.</p>
+      <p id="sample-flow-note" class="field-example" hidden>For the smoothest demo, keep web sources on and leave the sample document checked.</p>
 
       <details class="advanced-options">
         <summary>Advanced source options</summary>
@@ -100,7 +217,7 @@ www.vocabulary.com"></textarea>
           <input id="use_sample_doc" name="use_sample_doc" type="checkbox" />
           <span>Use sample document</span>
         </label>
-        <p class="helper-text">Adds <code>samples/sample.txt</code> automatically when generating.</p>
+        <p class="helper-text">Adds <code>samples/sample.txt</code> automatically when generating so the demo has a reliable document source.</p>
         {% endif %}
       </details>
     </section>
@@ -108,8 +225,35 @@ www.vocabulary.com"></textarea>
     <section class="step-card">
       <p class="step-label">Step 4</p>
       <h2>Generate</h2>
-      <p class="helper-text">When you're ready, generate your module from the topic, goals, and source settings.</p>
+      <p class="helper-text">This will create a grounded lesson, vocabulary, practice questions, and optional assessment tools.</p>
+      <label class="inline-row {% if not has_previous_module %}option-disabled{% endif %}">
+        <input
+          id="related_to_previous"
+          name="related_to_previous"
+          type="checkbox"
+          {% if not has_previous_module %}disabled{% endif %}
+        />
+        <span>Connect this module to the last one</span>
+      </label>
+      {% if has_previous_module %}
+      <p class="helper-text">If this topic relates to your last module on "{{ previous_topic }}", we'll add a short bridge.</p>
+      {% else %}
+      <p class="helper-text">This option becomes available after you create your first module.</p>
+      {% endif %}
       <button class="btn btn-primary btn-large" id="create-submit" type="submit">Generate Module</button>
+      <div id="create-progress" class="progress-box local-progress" hidden aria-live="polite">
+        <div class="progress-head">
+          <span class="spinner spinner-large" aria-hidden="true"></span>
+          <div>
+            <p class="progress-title">Building your module... this may take a moment.</p>
+            <p id="create-progress-message" class="progress-message">Finding sources...</p>
+            <p class="progress-note">Progress is approximate, not exact.</p>
+          </div>
+        </div>
+        <div class="progress-bar" aria-hidden="true">
+          <div id="create-progress-bar" class="progress-bar-fill"></div>
+        </div>
+      </div>
     </section>
   </form>
 

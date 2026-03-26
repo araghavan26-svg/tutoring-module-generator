@@ -3,4 +3,5 @@
 __pycache__/
 .pycache/
 .DS_Store
-
+data/
+.test_data/

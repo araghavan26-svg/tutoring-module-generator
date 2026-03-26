@@ -42,14 +42,33 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     retrieval_model: str = os.getenv("TUTOR_RETRIEVAL_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
     generation_model: str = os.getenv("TUTOR_GENERATION_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
-    doc_results_per_objective: int = _int_env("DOC_RESULTS_PER_OBJECTIVE", 4)
-    web_results_per_objective: int = _int_env("WEB_RESULTS_PER_OBJECTIVE", 3)
+    doc_results_per_objective: int = _int_env("DOC_RESULTS_PER_OBJECTIVE", 2)
+    web_results_per_objective: int = _int_env("WEB_RESULTS_PER_OBJECTIVE", 2)
+    max_evidence_items: int = _int_env("MAX_EVIDENCE_ITEMS", 10)
+    fast_section_limit: int = _int_env("FAST_SECTION_LIMIT", 3)
+    fast_doc_results_per_objective: int = _int_env("FAST_DOC_RESULTS_PER_OBJECTIVE", 1)
+    fast_web_results_per_objective: int = _int_env("FAST_WEB_RESULTS_PER_OBJECTIVE", 1)
+    fast_max_evidence_items: int = _int_env("FAST_MAX_EVIDENCE_ITEMS", 5)
+    openai_timeout_seconds: float = _float_env("OPENAI_TIMEOUT_SECONDS", 25.0)
+    retrieval_timeout_seconds: float = _float_env("OPENAI_RETRIEVAL_TIMEOUT_SECONDS", 18.0)
+    generation_timeout_seconds: float = _float_env("OPENAI_GENERATION_TIMEOUT_SECONDS", 28.0)
+    upload_timeout_seconds: float = _float_env("OPENAI_UPLOAD_TIMEOUT_SECONDS", 30.0)
     vector_poll_attempts: int = _int_env("VECTOR_POLL_ATTEMPTS", 25)
-    vector_poll_sleep_seconds: float = float(os.getenv("VECTOR_POLL_SLEEP_SECONDS", "0.4"))
+    vector_poll_sleep_seconds: float = _float_env("VECTOR_POLL_SLEEP_SECONDS", 0.4)
 
 
 _load_dotenv_if_present()
