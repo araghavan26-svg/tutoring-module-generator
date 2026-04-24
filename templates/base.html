@@ -4,19 +4,42 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title or "ModuleForge" }}</title>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("moduleforge-theme");
+          document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+        } catch (_) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="/">ModuleForge</a>
-      <nav>
-        <a href="/">Quick Create</a>
-        <a href="/app">Overview</a>
-        <a href="/create">Guided Create</a>
-        <a href="/modules">Saved Modules</a>
-      </nav>
+      <div class="header-actions">
+        <nav>
+          <a href="/">Quick Create</a>
+          <a href="/app">Overview</a>
+          <a href="/create">Guided Create</a>
+          <a href="/modules">Saved Modules</a>
+        </nav>
+        <button
+          id="theme-toggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch to dark mode"
+          aria-pressed="false"
+        >
+          <span class="theme-toggle-icon" aria-hidden="true">◐</span>
+          <span id="theme-toggle-label">Dark mode</span>
+        </button>
+      </div>
     </header>
     <main class="page-shell">{% block content %}{% endblock %}</main>
+    <script src="/static/theme.js"></script>
     {% block scripts %}{% endblock %}
   </body>
 </html>

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from app.models import ModuleGenerateResponse
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def test_create_page_shows_combined_input_and_local_progress(client):
@@ -22,6 +25,8 @@ def test_create_page_shows_combined_input_and_local_progress(client):
     assert "One objective is enough to generate a focused module." in quick_create.text
     assert "fewer goals" not in quick_create.text
     assert "fewer sources" not in quick_create.text
+    assert 'id="theme-toggle"' in quick_create.text
+    assert 'src="/static/theme.js"' in quick_create.text
     assert disclaimer.status_code == 200
     assert "Before You Use This System" in disclaimer.text
     assert "I Understand — Continue" in disclaimer.text
@@ -120,3 +125,19 @@ def test_dashboard_and_shared_routes_use_feature_contexts(client, sample_request
     assert "Saved Modules" in dashboard.text
     assert shared.status_code == 200
     assert "Photosynthesis module" in shared.text
+
+
+def test_theme_toggle_assets_use_css_variables_and_local_storage():
+    base_html = (ROOT_DIR / "templates" / "base.html").read_text()
+    style_css = (ROOT_DIR / "static" / "style.css").read_text()
+    theme_js = (ROOT_DIR / "static" / "theme.js").read_text()
+
+    assert 'id="theme-toggle"' in base_html
+    assert "moduleforge-theme" in base_html
+    assert "document.documentElement.dataset.theme" in base_html
+    assert 'src="/static/theme.js"' in base_html
+    assert 'html[data-theme="dark"]' in style_css
+    assert "--bg:" in style_css
+    assert "--panel:" in style_css
+    assert "localStorage.setItem(STORAGE_KEY, theme)" in theme_js
+    assert 'currentTheme === "dark" ? "light" : "dark"' in theme_js
