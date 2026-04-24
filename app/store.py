@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +8,7 @@ from threading import RLock
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
+from .config import settings
 from .models import (
     EvidenceItem,
     Module,
@@ -21,9 +21,7 @@ from .models import (
     utc_now,
 )
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA_DIR = Path(os.getenv("TUTOR_DATA_DIR", "")).expanduser() if os.getenv("TUTOR_DATA_DIR", "").strip() else PROJECT_ROOT / "data"
+DEFAULT_DATA_DIR = settings.data_dir
 STORE_FILENAME = "module_store.json"
 
 

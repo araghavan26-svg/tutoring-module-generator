@@ -1,19 +1,36 @@
 from __future__ import annotations
 
-import logging
+import json
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Iterator
+from functools import wraps
+from typing import Any, Callable, Dict, Iterator
+
+from .logging_utils import StructuredLogger
 
 
-def _format_log_fields(fields: Dict[str, object]) -> str:
-    return " ".join(f"{key}={value!r}" for key, value in sorted(fields.items()))
+def _serialize(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {str(key): _serialize(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialize(item) for item in value]
+    return value
+
+
+def _emit_log(logger: Any, event: str, **fields: Any) -> None:
+    if isinstance(logger, StructuredLogger):
+        logger.info(event, **fields)
+        return
+    payload = {"event": event, **{key: _serialize(value) for key, value in fields.items()}}
+    logger.info(json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str))
 
 
 @dataclass
 class StageTimingLogger:
-    logger: logging.Logger
+    logger: Any
     request_id: str
     request_started_at: float = field(default_factory=time.perf_counter)
     stage_starts: Dict[str, float] = field(default_factory=dict)
@@ -21,7 +38,7 @@ class StageTimingLogger:
 
     def log_event(self, event: str, **fields: object) -> None:
         payload = {"request_id": self.request_id, **fields}
-        self.logger.info("%s %s", event, _format_log_fields(payload))
+        _emit_log(self.logger, event, **payload)
 
     def start(self, stage: str, **fields: object) -> None:
         self.stage_starts[stage] = time.perf_counter()
@@ -49,3 +66,19 @@ class StageTimingLogger:
         total_duration = self.total_duration_seconds()
         self.log_event("generation.total", total_duration_ms=round(total_duration * 1000, 1), **fields)
         return total_duration
+
+
+def log_stage(stage: str, *, fields_factory: Callable[..., Dict[str, Any]] | None = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            stage_timer = kwargs.get("stage_timer")
+            if not isinstance(stage_timer, StageTimingLogger):
+                return func(*args, **kwargs)
+            fields = fields_factory(*args, **kwargs) if fields_factory is not None else {}
+            with stage_timer.measure(stage, **fields):
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

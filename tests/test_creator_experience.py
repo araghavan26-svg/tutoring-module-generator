@@ -91,10 +91,12 @@ class CreatorExperienceTests(unittest.TestCase):
     def test_create_page_includes_progress_ui(self) -> None:
         with TestClient(app) as client:
             response = client.get("/create")
-            landing = client.get("/")
+            landing = client.get("/app")
+            disclaimer = client.get("/")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(landing.status_code, 200)
+        self.assertEqual(disclaimer.status_code, 200)
         self.assertIn("What do you want to learn?", response.text)
         self.assertIn('id="learning_request"', response.text)
         self.assertIn('id="create-progress"', response.text)
@@ -102,6 +104,9 @@ class CreatorExperienceTests(unittest.TestCase):
         self.assertLess(response.text.index('id="create-submit"'), response.text.index('id="create-progress"'))
         self.assertIn("Progress is approximate, not exact.", response.text)
         self.assertIn("View Saved Modules", landing.text)
+        self.assertIn("Before You Use This System", disclaimer.text)
+        self.assertIn("I Understand — Continue", disclaimer.text)
+        self.assertIn('action="/app"', disclaimer.text)
         self.assertIn("Personalize your learning", response.text)
         self.assertIn("Current familiarity with the topic", response.text)
         self.assertIn("Learning purpose", response.text)
@@ -134,14 +139,20 @@ class CreatorExperienceTests(unittest.TestCase):
 
     def test_demo_polish_landing_create_and_dashboard_empty_states(self) -> None:
         with TestClient(app) as client:
-            landing = client.get("/")
+            disclaimer = client.get("/")
+            landing = client.get("/app")
             create = client.get("/create?sample=1")
             dashboard = client.get("/modules")
 
+        self.assertEqual(disclaimer.status_code, 200)
         self.assertEqual(landing.status_code, 200)
         self.assertEqual(create.status_code, 200)
         self.assertEqual(dashboard.status_code, 200)
 
+        self.assertIn("Before You Use This System", disclaimer.text)
+        self.assertIn("AI Limitations", disclaimer.text)
+        self.assertIn("API Key Notice", disclaimer.text)
+        self.assertIn("Usage Rules", disclaimer.text)
         self.assertIn("What this app does", landing.text)
         self.assertIn("Try Sample Module", landing.text)
         self.assertIn("View Saved Modules", landing.text)

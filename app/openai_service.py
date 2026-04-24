@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 import re
 import time
@@ -12,7 +11,8 @@ from urllib.parse import urlparse
 
 from openai import APITimeoutError, OpenAI
 
-from .config import ensure_openai_api_key, settings
+from .config import settings
+from .logging_utils import get_logger
 from .models import (
     EvidenceItem,
     ModuleAssignmentResponse,
@@ -29,10 +29,11 @@ from .models import (
     normalize_domain,
     utc_now,
 )
+from .openai_client import get_openai_client
 from .stage_timing import StageTimingLogger
 
 
-logger = logging.getLogger("tutoring_module_api")
+logger = get_logger("tutoring_module_api")
 MODULE_TIMEOUT_MESSAGE = "Module generation took too long. Please try fewer goals or fewer sources."
 
 
@@ -232,16 +233,6 @@ GRADE_RESPONSE_SCHEMA: Dict[str, Any] = {
         "unverified": {"type": "boolean"},
     },
 }
-
-
-def get_openai_client() -> OpenAI:
-    return OpenAI(
-        api_key=ensure_openai_api_key(),
-        timeout=settings.openai_timeout_seconds,
-        max_retries=0,
-    )
-
-
 def _clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
@@ -289,7 +280,7 @@ def _call_openai(operation: str, func: Any) -> Any:
     try:
         return func()
     except APITimeoutError as exc:
-        logger.warning("openai_timeout operation=%r", operation)
+        logger.warning("openai_timeout", operation=operation)
         raise OpenAIOperationTimeoutError() from exc
 
 

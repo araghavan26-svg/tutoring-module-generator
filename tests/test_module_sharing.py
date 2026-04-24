@@ -124,7 +124,7 @@ class ModuleSharingTests(unittest.TestCase):
         self.assertEqual(disable_response.status_code, 200)
         self.assertEqual(shared_page.status_code, 404)
         self.assertIn("This shared module is no longer available.", shared_page.text)
-        self.assertIn('href="/"', shared_page.text)
+        self.assertIn('href="/app"', shared_page.text)
 
     def test_share_persists_after_restart(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
