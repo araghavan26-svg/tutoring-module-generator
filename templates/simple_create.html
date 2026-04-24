@@ -5,6 +5,7 @@
   <p class="eyebrow">Grounded module generator</p>
   <h1>Create a tutoring module</h1>
   <p class="muted">Enter a topic, audience, and learning objectives. The app will retrieve evidence first, then build a cited module.</p>
+  <p class="alert info">{{ source_note }}</p>
 
   {% if error %}
   <div class="alert error" role="alert">{{ error }}</div>
@@ -44,7 +45,7 @@ Identify key vocabulary
 Apply the idea in a simple example"
       >{{ form.learning_objectives }}</textarea>
     </label>
-    <p class="helper-text">Add one objective per line.</p>
+    <p class="helper-text">Add one objective per line. One objective is enough to generate a focused module.</p>
 
     <label class="inline-row">
       <input name="allow_web" type="checkbox" value="true" {% if form.allow_web %}checked{% endif %} />

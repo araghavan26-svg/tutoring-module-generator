@@ -46,7 +46,7 @@
     "Generating practice questions...",
   ];
   const PROGRESS_WIDTHS = ["18%", "42%", "68%", "90%"];
-  const MODULE_TIMEOUT_MESSAGE = "Module generation took too long. Please try fewer goals or fewer sources.";
+  const MODULE_TIMEOUT_MESSAGE = "Module generation took longer than expected. Please try again in a moment.";
   let progressTimer = null;
   let progressStageIndex = 0;
 

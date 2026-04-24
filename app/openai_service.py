@@ -34,7 +34,7 @@ from .stage_timing import StageTimingLogger
 
 
 logger = get_logger("tutoring_module_api")
-MODULE_TIMEOUT_MESSAGE = "Module generation took too long. Please try fewer goals or fewer sources."
+MODULE_TIMEOUT_MESSAGE = "Module generation took longer than expected. Please try again in a moment."
 
 
 MODULE_OUTPUT_SCHEMA: Dict[str, Any] = {

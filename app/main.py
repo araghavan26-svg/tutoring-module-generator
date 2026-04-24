@@ -111,6 +111,10 @@ def _simple_create_context(*, error: str | None = None, form: dict[str, Any] | N
     return {
         "title": "Create a Module",
         "error": error,
+        "source_note": (
+            "No documents uploaded. The module will use web search if enabled, "
+            "otherwise it may mark sections as unverified."
+        ),
         "form": form
         or {
             "topic": "",
@@ -230,7 +234,10 @@ def simple_generate_module_page(
             request,
             "simple_create.html",
             _simple_create_context(
-                error="Module generation failed. Please try fewer goals or fewer sources.",
+                error=(
+                    "We could not generate the module just now. One goal is okay, and no document upload is required. "
+                    "Try again, or turn on web search if you want the app to look for sources automatically."
+                ),
                 form=form,
             ),
             status_code=500,

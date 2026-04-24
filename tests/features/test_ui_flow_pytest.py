@@ -18,6 +18,10 @@ def test_create_page_shows_combined_input_and_local_progress(client):
     assert 'name="learning_objectives"' in quick_create.text
     assert 'name="allow_web"' in quick_create.text
     assert 'action="/ui/modules/generate"' in quick_create.text
+    assert "No documents uploaded. The module will use web search if enabled" in quick_create.text
+    assert "One objective is enough to generate a focused module." in quick_create.text
+    assert "fewer goals" not in quick_create.text
+    assert "fewer sources" not in quick_create.text
     assert disclaimer.status_code == 200
     assert "Before You Use This System" in disclaimer.text
     assert "I Understand — Continue" in disclaimer.text
@@ -59,6 +63,48 @@ def test_simple_form_submission_renders_results_page(client, sample_module, samp
     assert request.audience_level == "Middle school"
     assert request.learning_objectives == ["Explain the core idea", "Use one simple example"]
     assert request.allow_web is True
+
+
+def test_simple_form_accepts_one_objective_with_no_uploaded_documents(client, sample_module, sample_evidence):
+    with patch(
+        "app.main._generate_module_response",
+        return_value=ModuleGenerateResponse(module=sample_module, evidence_pack=sample_evidence),
+    ) as generate_response:
+        response = client.post(
+            "/ui/modules/generate",
+            data={
+                "topic": "Photosynthesis",
+                "audience_level": "Middle school",
+                "learning_objectives": "Explain the core idea",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "Generated module" in response.text
+    assert "fewer goals" not in response.text
+    assert "fewer sources" not in response.text
+
+    request = generate_response.call_args.args[0]
+    assert request.learning_objectives == ["Explain the core idea"]
+    assert request.allow_web is False
+
+
+def test_simple_form_generation_error_does_not_blame_single_goal_or_missing_uploads(client):
+    with patch("app.main._generate_module_response", side_effect=RuntimeError("upstream failed")):
+        response = client.post(
+            "/ui/modules/generate",
+            data={
+                "topic": "Photosynthesis",
+                "audience_level": "Middle school",
+                "learning_objectives": "Explain the core idea",
+            },
+        )
+
+    assert response.status_code == 500
+    assert "One goal is okay" in response.text
+    assert "no document upload is required" in response.text
+    assert "fewer goals" not in response.text
+    assert "fewer sources" not in response.text
 
 
 def test_dashboard_and_shared_routes_use_feature_contexts(client, sample_request, sample_module, sample_evidence):
