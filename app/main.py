@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, File, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -93,8 +93,41 @@ def enforce_byok_startup_check() -> None:
     module_store.load_from_disk()
 
 
+def _generate_module_response(payload: ModuleGenerateRequest) -> ModuleGenerateResponse:
+    return generate_module_response(
+        payload,
+        store=module_store,
+        client_provider=get_openai_client,
+        evidence_builder=build_evidence_pack,
+        module_generator=generate_module_from_evidence,
+        quality_gate=enforce_quality_gate,
+        relatedness_detector=detect_topic_relatedness,
+        topic_bridge_builder=build_topic_bridge_context,
+        unverified_module_builder=build_unverified_module,
+    )
+
+
+def _simple_create_context(*, error: str | None = None, form: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "title": "Create a Module",
+        "error": error,
+        "form": form
+        or {
+            "topic": "",
+            "audience_level": "Middle school",
+            "learning_objectives": "",
+            "allow_web": True,
+        },
+    }
+
+
 @app.get("/")
-def landing_page(request: Request) -> Response:
+def simple_module_page(request: Request) -> Response:
+    return templates.TemplateResponse(request, "simple_create.html", _simple_create_context())
+
+
+@app.get("/disclaimer")
+def disclaimer_page(request: Request) -> Response:
     return templates.TemplateResponse(request, "disclaimer.html", {"title": "Before You Use This System"})
 
 
@@ -151,19 +184,73 @@ async def upload_docs(files: List[UploadFile] = File(...)) -> DocsUploadResponse
     return await upload_documents(files, client_provider=get_openai_client)
 
 
+@app.post("/ui/modules/generate")
+def simple_generate_module_page(
+    request: Request,
+    topic: str = Form(...),
+    audience_level: str = Form(...),
+    learning_objectives: str = Form(...),
+    allow_web: bool = Form(False),
+) -> Response:
+    form = {
+        "topic": topic,
+        "audience_level": audience_level,
+        "learning_objectives": learning_objectives,
+        "allow_web": allow_web,
+    }
+    objectives = [line.strip() for line in learning_objectives.splitlines() if line.strip()]
+    if not topic.strip():
+        return templates.TemplateResponse(
+            request,
+            "simple_create.html",
+            _simple_create_context(error="Please enter a topic.", form=form),
+            status_code=400,
+        )
+    if not objectives:
+        return templates.TemplateResponse(
+            request,
+            "simple_create.html",
+            _simple_create_context(error="Please add at least one learning objective.", form=form),
+            status_code=400,
+        )
+
+    try:
+        response = _generate_module_response(
+            ModuleGenerateRequest(
+                topic=topic,
+                audience_level=audience_level,
+                learning_objectives=objectives,
+                allow_web=allow_web,
+                fast_mode=True,
+            )
+        )
+    except Exception:
+        logger.exception("Simple UI module generation failed")
+        return templates.TemplateResponse(
+            request,
+            "simple_create.html",
+            _simple_create_context(
+                error="Module generation failed. Please try fewer goals or fewer sources.",
+                form=form,
+            ),
+            status_code=500,
+        )
+
+    evidence_by_id = {item.evidence_id: item for item in response.evidence_pack}
+    return templates.TemplateResponse(
+        request,
+        "simple_results.html",
+        {
+            "title": response.module.title,
+            "module": response.module,
+            "evidence_by_id": evidence_by_id,
+        },
+    )
+
+
 @app.post("/v1/modules/generate", response_model=ModuleGenerateResponse)
 def generate_module(payload: ModuleGenerateRequest) -> ModuleGenerateResponse:
-    return generate_module_response(
-        payload,
-        store=module_store,
-        client_provider=get_openai_client,
-        evidence_builder=build_evidence_pack,
-        module_generator=generate_module_from_evidence,
-        quality_gate=enforce_quality_gate,
-        relatedness_detector=detect_topic_relatedness,
-        topic_bridge_builder=build_topic_bridge_context,
-        unverified_module_builder=build_unverified_module,
-    )
+    return _generate_module_response(payload)
 
 
 @app.post("/v1/modules/{module_id}/regenerate", response_model=SectionRegenerateResponse)

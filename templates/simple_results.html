@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel results-shell">
+  <p class="eyebrow">Generated module</p>
+  <h1>{{ module.title }}</h1>
+  {% if module.overview %}
+  <p class="muted">{{ module.overview }}</p>
+  {% endif %}
+
+  <div class="module-actions">
+    <a class="btn btn-primary" href="/modules/{{ module.module_id }}">Open full editor</a>
+    <a class="btn btn-secondary" href="/v1/modules/{{ module.module_id }}/export/markdown" target="_blank" rel="noopener">Export Markdown</a>
+    <a class="btn btn-secondary" href="/">Create another module</a>
+  </div>
+</section>
+
+<section class="results-list">
+  {% for section in module.sections %}
+  <article class="panel result-section {% if section.unverified %}result-section-unverified{% endif %}">
+    <div class="result-section-heading">
+      <h2>{{ section.heading }}</h2>
+      {% if section.unverified %}
+      <span class="unverified-badge">Unverified</span>
+      {% endif %}
+    </div>
+
+    {% if section.learning_goal %}
+    <p class="learning-goal"><strong>Learning goal:</strong> {{ section.learning_goal }}</p>
+    {% endif %}
+
+    {% if section.unverified and section.unverified_reason %}
+    <p class="alert warning">{{ section.unverified_reason }}</p>
+    {% endif %}
+
+    <div class="section-content">{{ section.content }}</div>
+
+    <div class="citation-list">
+      <h3>Citations</h3>
+      {% if section.citations %}
+      <ul>
+        {% for citation_id in section.citations %}
+        {% set evidence = evidence_by_id.get(citation_id) %}
+        <li>
+          {% if evidence %}
+          <div class="citation-title-row">
+            <strong>{{ evidence.title }}</strong>
+            <span class="citation-type">{{ evidence.source_type }}</span>
+          </div>
+          {% if evidence.source_type == "web" and evidence.url %}
+          <a href="{{ evidence.url }}" target="_blank" rel="noopener noreferrer">
+            {{ evidence.domain or evidence.url }} - Open source
+          </a>
+          {% elif evidence.source_type == "doc" %}
+          <span class="muted">{{ evidence.doc_name }}{% if evidence.location %} - {{ evidence.location }}{% endif %}</span>
+          {% endif %}
+          <p>{{ evidence.snippet }}</p>
+          {% else %}
+          <span>{{ citation_id }}</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No citations listed for this section.</p>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

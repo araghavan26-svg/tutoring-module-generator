@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
+from app.models import ModuleGenerateResponse
+
 
 def test_create_page_shows_combined_input_and_local_progress(client):
-    disclaimer = client.get("/")
+    quick_create = client.get("/")
+    disclaimer = client.get("/disclaimer")
     app_home = client.get("/app")
     response = client.get("/create?sample=1")
 
+    assert quick_create.status_code == 200
+    assert "Create a tutoring module" in quick_create.text
+    assert 'name="topic"' in quick_create.text
+    assert 'name="audience_level"' in quick_create.text
+    assert 'name="learning_objectives"' in quick_create.text
+    assert 'name="allow_web"' in quick_create.text
+    assert 'action="/ui/modules/generate"' in quick_create.text
     assert disclaimer.status_code == 200
     assert "Before You Use This System" in disclaimer.text
     assert "I Understand — Continue" in disclaimer.text
@@ -18,6 +30,35 @@ def test_create_page_shows_combined_input_and_local_progress(client):
     assert 'id="preset-learn-scratch"' in response.text
     assert response.text.index('id="create-submit"') < response.text.index('id="create-progress"')
     assert "This will create a grounded lesson, vocabulary, practice questions, and optional assessment tools." in response.text
+
+
+def test_simple_form_submission_renders_results_page(client, sample_module, sample_evidence):
+    with patch(
+        "app.main._generate_module_response",
+        return_value=ModuleGenerateResponse(module=sample_module, evidence_pack=sample_evidence),
+    ) as generate_response:
+        response = client.post(
+            "/ui/modules/generate",
+            data={
+                "topic": "Photosynthesis",
+                "audience_level": "Middle school",
+                "learning_objectives": "Explain the core idea\nUse one simple example",
+                "allow_web": "true",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "Generated module" in response.text
+    assert "Start here" in response.text
+    assert "Grounded explanation for Photosynthesis." in response.text
+    assert "kids.britannica.com" in response.text
+    assert "Open source" in response.text
+
+    request = generate_response.call_args.args[0]
+    assert request.topic == "Photosynthesis"
+    assert request.audience_level == "Middle school"
+    assert request.learning_objectives == ["Explain the core idea", "Use one simple example"]
+    assert request.allow_web is True
 
 
 def test_dashboard_and_shared_routes_use_feature_contexts(client, sample_request, sample_module, sample_evidence):

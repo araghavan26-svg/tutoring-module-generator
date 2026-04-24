@@ -92,11 +92,19 @@ class CreatorExperienceTests(unittest.TestCase):
         with TestClient(app) as client:
             response = client.get("/create")
             landing = client.get("/app")
-            disclaimer = client.get("/")
+            quick_create = client.get("/")
+            disclaimer = client.get("/disclaimer")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(landing.status_code, 200)
+        self.assertEqual(quick_create.status_code, 200)
         self.assertEqual(disclaimer.status_code, 200)
+        self.assertIn("Create a tutoring module", quick_create.text)
+        self.assertIn('name="topic"', quick_create.text)
+        self.assertIn('name="audience_level"', quick_create.text)
+        self.assertIn('name="learning_objectives"', quick_create.text)
+        self.assertIn('name="allow_web"', quick_create.text)
+        self.assertIn('action="/ui/modules/generate"', quick_create.text)
         self.assertIn("What do you want to learn?", response.text)
         self.assertIn('id="learning_request"', response.text)
         self.assertIn('id="create-progress"', response.text)
@@ -139,16 +147,20 @@ class CreatorExperienceTests(unittest.TestCase):
 
     def test_demo_polish_landing_create_and_dashboard_empty_states(self) -> None:
         with TestClient(app) as client:
-            disclaimer = client.get("/")
+            quick_create = client.get("/")
+            disclaimer = client.get("/disclaimer")
             landing = client.get("/app")
             create = client.get("/create?sample=1")
             dashboard = client.get("/modules")
 
+        self.assertEqual(quick_create.status_code, 200)
         self.assertEqual(disclaimer.status_code, 200)
         self.assertEqual(landing.status_code, 200)
         self.assertEqual(create.status_code, 200)
         self.assertEqual(dashboard.status_code, 200)
 
+        self.assertIn("Create a tutoring module", quick_create.text)
+        self.assertIn("Use web sources", quick_create.text)
         self.assertIn("Before You Use This System", disclaimer.text)
         self.assertIn("AI Limitations", disclaimer.text)
         self.assertIn("API Key Notice", disclaimer.text)

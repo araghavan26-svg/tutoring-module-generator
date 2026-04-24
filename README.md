@@ -144,9 +144,12 @@ Docs-only optional check:
 ## Creator Web UI
 
 After starting the server, open:
-- `GET /` landing page
-- `GET /create` module creation form
+- `GET /` quick-create module form for non-technical users
+- `POST /ui/modules/generate` quick-create form submission and results page
+- `GET /app` overview/landing page
+- `GET /create` guided module creation form
 - `GET /modules/{module_id}` module editor page
+- `GET /disclaimer` standalone disclaimer page
 
 Guided first-use flow:
 1. Click **Create a Module** (or **Try Sample Module**).

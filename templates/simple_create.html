@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel simple-ui">
+  <p class="eyebrow">Grounded module generator</p>
+  <h1>Create a tutoring module</h1>
+  <p class="muted">Enter a topic, audience, and learning objectives. The app will retrieve evidence first, then build a cited module.</p>
+
+  {% if error %}
+  <div class="alert error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <form class="simple-form" action="/ui/modules/generate" method="post">
+    <label>
+      Topic
+      <input
+        name="topic"
+        type="text"
+        required
+        placeholder="Photosynthesis"
+        value="{{ form.topic }}"
+      />
+    </label>
+
+    <label>
+      Audience level
+      <input
+        name="audience_level"
+        type="text"
+        required
+        placeholder="Middle school"
+        value="{{ form.audience_level }}"
+      />
+    </label>
+
+    <label>
+      Learning objectives
+      <textarea
+        name="learning_objectives"
+        rows="5"
+        required
+        placeholder="Explain what photosynthesis is
+Identify key vocabulary
+Apply the idea in a simple example"
+      >{{ form.learning_objectives }}</textarea>
+    </label>
+    <p class="helper-text">Add one objective per line.</p>
+
+    <label class="inline-row">
+      <input name="allow_web" type="checkbox" value="true" {% if form.allow_web %}checked{% endif %} />
+      <span>Use web sources</span>
+    </label>
+
+    <button class="btn btn-primary btn-large" type="submit">Generate Module</button>
+  </form>
+</section>
+{% endblock %}
