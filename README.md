@@ -9,6 +9,32 @@ Pipeline:
 Quality rule:
 - Every section must have citation IDs (`citations`) referencing evidence IDs, or be marked `unverified=true` with `unverified_reason`.
 
+## Current Status And Roadmap
+
+Current status: MVP is deployed on Render and can be shared by link. Main next goal is improving the user experience for non-technical users.
+
+Next-feature priorities from exhibition feedback:
+
+1. Real user interface
+   - Mature the creator UI into a simple non-technical experience so users do not need to use `/docs`.
+   - The UI should let users enter a topic, audience level, objectives, upload docs, toggle web search, generate a module, and view/export results.
+2. Light mode / dark mode
+   - Add a theme toggle.
+   - Persist the user's theme choice locally if possible.
+3. Image/photo support
+   - Add support for modules to include helpful images or photos.
+   - Example: if the module is about roasted chicken, the user can see what roasted chicken looks like.
+   - Images should be clearly marked as visual aids and should not replace citations.
+4. More safeguards
+   - Add safer topic handling.
+   - Warn users when sources are weak or missing.
+   - Prevent uncited claims where possible.
+   - Add basic API cost and rate protections.
+5. Multi-user collaboration
+   - Treat this as a longer-term feature.
+   - Multiple people should eventually be able to work on the same module.
+   - This likely requires accounts, saved projects, a database, and permissions.
+
 ## Project Layout
 
 ```text
